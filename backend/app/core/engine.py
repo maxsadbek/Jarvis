@@ -2,7 +2,7 @@
 
 Orchestrates all AI operations:
 - Routes requests to the appropriate LLM provider
-- Manages conversation context and memory
+- Manages conversation context and memory via MemoryManager
 - Coordinates tool execution
 - Handles voice transcription and synthesis
 """
@@ -18,8 +18,8 @@ from backend.app.config import settings
 from backend.app.core.llm.base import LLMProvider
 from backend.app.core.llm.openrouter import OpenRouterProvider
 from backend.app.core.llm.local import LocalLLMProvider
+from backend.app.core.memory.manager import MemoryManager
 from backend.app.core.memory.context import ContextManager
-from backend.app.core.memory.vector import VectorMemory
 from backend.app.models.schemas import (
     ConnectionState,
     Message,
@@ -35,7 +35,7 @@ class AIEngine:
 
     def __init__(self) -> None:
         self._llm_provider: Optional[LLMProvider] = None
-        self._memory: Optional[VectorMemory] = None
+        self._memory: Optional[MemoryManager] = None
         self._context_manager: Optional[ContextManager] = None
         self._tool_registry: Optional[ToolRegistry] = None
         self._start_time: float = time.time()
@@ -51,7 +51,7 @@ class AIEngine:
             self._llm_provider = OpenRouterProvider()
             await self._llm_provider.initialize()
             if self._llm_provider.is_available:
-                logger.info(f"✓ Connected to {self._llm_provider.provider_name}")
+                logger.info(f"Connected to {self._llm_provider.provider_name}")
 
         # Fallback to local LLM
         if (not self._llm_provider or not self._llm_provider.is_available) and settings.USE_LOCAL_LLM:
@@ -59,30 +59,27 @@ class AIEngine:
             self._llm_provider = LocalLLMProvider()
             await self._llm_provider.initialize()
             if self._llm_provider.is_available:
-                logger.info(f"✓ Connected to {self._llm_provider.provider_name}")
+                logger.info(f"Connected to {self._llm_provider.provider_name}")
 
         if not self._llm_provider or not self._llm_provider.is_available:
             logger.warning("No LLM provider available")
 
-        # 2. Initialize memory
+        # 2. Initialize advanced memory system
         if settings.MEMORY_ENABLED:
             logger.info("Initializing memory system...")
-            self._memory = VectorMemory()
-            initialized = await self._memory.initialize()
-            if initialized:
-                logger.info("✓ Memory system ready")
-            else:
-                logger.warning("Memory system not available")
+            self._memory = MemoryManager()
+            await self._memory.initialize(llm_provider=self._llm_provider)
+            logger.info("Memory system ready")
 
-        # 3. Initialize context manager
+        # 3. Initialize context manager (uses MemoryManager)
         self._context_manager = ContextManager(self._memory)
-        logger.info("✓ Context manager ready")
+        logger.info("Context manager ready")
 
         # 4. Initialize tool registry
         if settings.TOOLS_ENABLED:
             self._tool_registry = ToolRegistry()
             await self._tool_registry.initialize()
-            logger.info(f"✓ Tool registry ready with {len(self._tool_registry.tools)} tools")
+            logger.info(f"Tool registry ready with {len(self._tool_registry.tools)} tools")
 
         logger.info("JARVIS AI Engine initialization complete")
 
@@ -93,11 +90,14 @@ class AIEngine:
     @state.setter
     def state(self, new_state: ConnectionState) -> None:
         self._state = new_state
-        logger.debug(f"State changed to: {new_state.value}")
 
     @property
     def is_llm_ready(self) -> bool:
         return self._llm_provider is not None and self._llm_provider.is_available
+
+    @property
+    def memory(self) -> Optional[MemoryManager]:
+        return self._memory
 
     async def chat(
         self,
@@ -107,6 +107,9 @@ class AIEngine:
         model: Optional[str] = None,
     ) -> Message | AsyncGenerator[str, None]:
         """Process a chat message and return AI response.
+
+        Uses the MemoryManager for personalized context and
+        automatic memory storage.
 
         Args:
             message: The user's message.
@@ -127,20 +130,20 @@ class AIEngine:
 
         self.state = ConnectionState.PROCESSING
 
-        # Build conversation context
+        # Build context using MemoryManager for personalized results
         context_messages = await self._context_manager.build_context(
             conversation_id=conversation_id,
             current_message=message,
         )
 
-        # Store user message
+        # Store user message via MemoryManager (processes through all subsystems)
         user_msg = Message(
             role=MessageRole.USER,
             content=message,
             metadata={"conversation_id": conversation_id},
         )
         if self._memory:
-            await self._memory.store_message(user_msg, conversation_id)
+            await self._memory.process_message(user_msg, conversation_id)
 
         if stream:
             return self._stream_response(context_messages, conversation_id, model)
@@ -152,9 +155,9 @@ class AIEngine:
             )
             response.metadata["conversation_id"] = conversation_id
 
-            # Store assistant response
+            # Store assistant response via MemoryManager
             if self._memory:
-                await self._memory.store_message(response, conversation_id)
+                await self._memory.process_message(response, conversation_id)
 
             self.state = ConnectionState.CONNECTED
             return response
@@ -182,19 +185,26 @@ class AIEngine:
                     content=full_response,
                     metadata={"conversation_id": conversation_id},
                 )
-                await self._memory.store_message(response_msg, conversation_id)
+                await self._memory.process_message(response_msg, conversation_id)
             self.state = ConnectionState.CONNECTED
 
     async def get_status(self) -> SystemStatus:
         """Get the current system status."""
         import psutil
 
+        memory_stats = {}
+        if self._memory:
+            try:
+                memory_stats = await self._memory.get_stats()
+            except Exception:
+                pass
+
         return SystemStatus(
             llm_connected=self.is_llm_ready,
             llm_model=settings.OPENROUTER_MODEL if self.is_llm_ready else None,
             stt_ready=True,
             tts_ready=True,
-            memory_ready=self._memory is not None and self._memory._initialized,
+            memory_ready=self._memory is not None,
             tools_loaded=list(self._tool_registry.tools.keys()) if self._tool_registry else [],
             cpu_usage=psutil.cpu_percent(interval=0.1),
             memory_usage=psutil.virtual_memory().percent,
@@ -225,5 +235,7 @@ class AIEngine:
         logger.info("Shutting down JARVIS engine...")
         if hasattr(self._llm_provider, "close"):
             await self._llm_provider.close()
+        if self._memory:
+            await self._memory.shutdown()
         self.state = ConnectionState.DISCONNECTED
         logger.info("JARVIS engine shutdown complete")

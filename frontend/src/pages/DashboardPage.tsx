@@ -3,9 +3,18 @@ import { useNavigate } from "react-router-dom";
 import { StatusPanel } from "@/components/dashboard/StatusPanel";
 import { QuickActions } from "@/components/dashboard/QuickActions";
 import { RecentConversations } from "@/components/dashboard/RecentConversations";
+import { MemoryIndicator } from "@/components/ui/MemoryIndicator";
+import { ToolsPanel } from "@/components/ui/ToolsPanel";
 import { useChatStore } from "@/stores/chatStore";
 import type { SystemStatus } from "@/types";
-import { Bot, Activity, Zap, Cpu } from "lucide-react";
+import {
+  Bot,
+  Activity,
+  Zap,
+  Cpu,
+  Sparkles,
+  Gauge,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export function DashboardPage() {
@@ -53,53 +62,85 @@ export function DashboardPage() {
         ? `${Math.floor(systemStatus.uptime_seconds / 3600)}h ${Math.floor((systemStatus.uptime_seconds % 3600) / 60)}m`
         : "--",
       icon: Activity,
-      color: "text-accent-green",
+      iconColor: "from-accent-blue to-accent-cyan",
+      glow: "rgba(0, 212, 255, 0.3)",
     },
     {
       label: "CPU",
       value: systemStatus ? `${systemStatus.cpu_usage.toFixed(1)}%` : "--",
       icon: Cpu,
-      color: "text-accent-blue",
+      iconColor: "from-accent-purple to-accent-rose",
+      glow: "rgba(139, 92, 246, 0.3)",
     },
     {
       label: "Memory",
       value: systemStatus ? `${systemStatus.memory_usage.toFixed(1)}%` : "--",
-      icon: Zap,
-      color: "text-accent-purple",
+      icon: Gauge,
+      iconColor: "from-accent-emerald to-accent-cyan",
+      glow: "rgba(52, 211, 153, 0.3)",
     },
     {
       label: "Tools",
       value: systemStatus ? `${systemStatus.tools_loaded.length}` : "--",
       icon: Bot,
-      color: "text-accent-amber",
+      iconColor: "from-accent-amber to-accent-rose",
+      glow: "rgba(245, 158, 11, 0.3)",
     },
   ];
 
   return (
-    <div className="flex-1 overflow-y-auto p-6">
-      {/* Page header */}
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gradient">Dashboard</h1>
-        <p className="text-sm text-gray-500 mt-1">
-          System overview and quick actions
-        </p>
+    <div className="flex-1 overflow-y-auto p-6 space-y-6">
+      {/* Page header with holographic accent */}
+      <div className="relative">
+        <div className="absolute -top-4 -left-4 w-32 h-32 bg-accent-blue/5 rounded-full blur-3xl pointer-events-none" />
+        <div className="relative">
+          <div className="flex items-center gap-3 mb-1">
+            <Sparkles className="w-5 h-5 text-accent-blue" />
+            <h1 className="text-2xl font-bold text-gradient">Dashboard</h1>
+          </div>
+          <p className="text-sm text-gray-500 ml-8">
+            System overview, quick actions, and AI companion status
+          </p>
+        </div>
       </div>
 
       {/* Stats bar */}
-      <div className="grid grid-cols-4 gap-3 mb-6">
+      <div className="grid grid-cols-4 gap-3">
         {stats.map((stat) => {
           const IconComponent = stat.icon;
           return (
             <div
               key={stat.label}
-              className="glass-card px-4 py-3 flex items-center gap-3"
+              className={cn(
+                "group relative overflow-hidden rounded-2xl p-4",
+                "bg-white/[0.03] border border-white/[0.06]",
+                "hover:bg-white/[0.05] hover:border-white/10",
+                "transition-all duration-300"
+              )}
             >
-              <div className={cn("w-10 h-10 rounded-xl bg-white/[0.03] flex items-center justify-center", stat.color)}>
-                <IconComponent className="w-5 h-5" />
-              </div>
-              <div>
-                <p className="text-lg font-bold text-gray-200">{stat.value}</p>
-                <p className="text-xs text-gray-500">{stat.label}</p>
+              {/* Hover glow - split gradient into two opacity-applied classes */}
+              <div
+                className={cn(
+                  "absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 rounded-2xl",
+                  "bg-gradient-to-br",
+                  stat.iconColor.split(" ").map(c => c + "/5").join(" ")
+                )}
+              />
+              <div className="relative z-10 flex items-center gap-3">
+                <div
+                  className="w-10 h-10 rounded-xl flex items-center justify-center bg-white/[0.03]"
+                  style={{
+                    boxShadow: `0 0 20px ${stat.glow}`,
+                  }}
+                >
+                  <IconComponent className="w-5 h-5 text-white" />
+                </div>
+                <div>
+                  <p className="text-lg font-bold text-gray-200">
+                    {stat.value}
+                  </p>
+                  <p className="text-xs text-gray-500">{stat.label}</p>
+                </div>
               </div>
             </div>
           );
@@ -107,7 +148,8 @@ export function DashboardPage() {
       </div>
 
       {/* Main grid */}
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-4 gap-4">
+        {/* Left column - Status + Actions */}
         <div className="col-span-2 space-y-4">
           <StatusPanel
             connectionState={connectionState}
@@ -115,7 +157,18 @@ export function DashboardPage() {
           />
           <QuickActions onAction={handleAction} />
         </div>
-        <div className="space-y-4">
+
+        {/* Right column - Memory + Tools + Conversations */}
+        <div className="col-span-2 space-y-4">
+          {/* Memory and Tools in a 2-col subgrid */}
+          <div className="grid grid-cols-2 gap-4">
+            <MemoryIndicator
+              systemStatus={systemStatus}
+            />
+            <ToolsPanel
+              systemStatus={systemStatus}
+            />
+          </div>
           <RecentConversations onSelectConversation={handleSelectConversation} />
         </div>
       </div>

@@ -5,9 +5,10 @@ Provides REST endpoints for text-based chat with JARVIS.
 
 from __future__ import annotations
 
+import time
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from loguru import logger
 
 from backend.app.core.engine import AIEngine
@@ -16,21 +17,21 @@ from backend.app.models.schemas import ChatRequest, ChatResponse, Message
 router = APIRouter(prefix="/api/chat", tags=["chat"])
 
 
-def get_engine() -> AIEngine:
-    """Get the AI engine instance (injected via app state)."""
-    from fastapi import Request
-    # This will be set in main.py
-    raise NotImplementedError("Engine injected via app state")
+# Replaceable via app.dependency_overrides in main.py
+async def get_engine() -> AIEngine:
+    """Get the AI engine instance (overridden via app.dependency_overrides)."""
+    raise NotImplementedError("Override via dependency_overrides in main.py")
 
 
 @router.post("", response_model=ChatResponse)
-async def chat(request: ChatRequest) -> ChatResponse:
+async def chat(
+    request: ChatRequest,
+    engine: AIEngine = Depends(get_engine),
+) -> ChatResponse:
     """Send a chat message and get AI response."""
-    engine = get_engine()
     if not engine.is_llm_ready:
         raise HTTPException(status_code=503, detail="AI engine not ready")
 
-    import time
     start = time.time()
 
     response = await engine.chat(
@@ -53,7 +54,6 @@ async def chat(request: ChatRequest) -> ChatResponse:
 @router.post("/stream")
 async def chat_stream(request: ChatRequest) -> dict:
     """Initiate a streaming chat response (managed via WebSocket)."""
-    # Streaming is handled via WebSocket for efficiency
     return {
         "message": "Use WebSocket connection for streaming responses",
         "websocket_path": "/ws",
@@ -61,11 +61,15 @@ async def chat_stream(request: ChatRequest) -> dict:
 
 
 @router.get("/history/{conversation_id}")
-async def get_history(conversation_id: str, limit: int = 50) -> list[Message]:
+async def get_history(
+    conversation_id: str,
+    limit: int = 50,
+    engine: AIEngine = Depends(get_engine),
+) -> list[Message]:
     """Get conversation history."""
-    engine = get_engine()
-    if engine._memory:
-        messages = await engine._memory.get_conversation_history(
+    memory = getattr(engine, "_memory", None)
+    if memory:
+        messages = await memory.get_conversation_history(
             conversation_id=conversation_id,
             limit=limit,
         )

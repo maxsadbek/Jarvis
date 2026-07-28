@@ -54,23 +54,29 @@ class FileOpsTool(BaseTool):
     def description(self) -> str:
         return "Read, write, list, search, and manage files on the computer"
 
+    SAFE_FILE_EXTENSIONS: set = {".txt", ".md", ".py", ".js", ".ts", ".jsx", ".tsx",
+                                 ".json", ".yaml", ".yml", ".toml", ".ini", ".cfg",
+                                 ".csv", ".xml", ".html", ".css", ".scss"}
+
+    MAX_OUTPUT_SIZE: int = 100_000
+
     def _resolve_path(self, path: str) -> Optional[Path]:
-        """Resolve a path safely, preventing directory traversal."""
+        """Resolve a path safely, preventing directory traversal and symlink attacks."""
         try:
             p = Path(path)
             if not p.is_absolute():
                 p = self._allowed_base / p
-            p = p.resolve()
+            p = p.resolve(strict=False)
 
-            # Security: Ensure path is within allowed directories
+            # Security: Ensure resolved path is within allowed directories
             try:
                 p.relative_to(self._allowed_base)
             except ValueError:
-                logger.warning(f"Path traversal blocked: {path}")
+                logger.warning(f"Path traversal blocked: {path} -> {p}")
                 return None
 
             return p
-        except Exception:
+        except (OSError, ValueError, RuntimeError):
             return None
 
     async def execute(self, operation: str, path: str, content: str = "", pattern: str = "", **kwargs: Any) -> dict[str, Any]:
@@ -121,16 +127,11 @@ class FileOpsTool(BaseTool):
             if ext not in settings.ALLOWED_FILE_EXTENSIONS:
                 return {"success": False, "error": f"File type not allowed: {ext}", "result": ""}
 
-            # Read text files
-            text_extensions = {".txt", ".md", ".py", ".js", ".ts", ".jsx", ".tsx",
-                              ".json", ".yaml", ".yml", ".toml", ".ini", ".cfg",
-                              ".csv", ".xml", ".html", ".css", ".scss"}
-
-            if ext in text_extensions:
+            if ext in self.SAFE_FILE_EXTENSIONS:
                 content = path.read_text(encoding="utf-8", errors="replace")
                 # Truncate if too long
-                if len(content) > 100_000:
-                    content = content[:100_000] + "\n\n... [truncated]"
+                if len(content) > self.MAX_OUTPUT_SIZE:
+                    content = content[:self.MAX_OUTPUT_SIZE] + "\n\n... [truncated]"
                 return {"success": True, "result": content, "size_bytes": len(content)}
             else:
                 return {"success": True, "result": f"[Binary file: {path.name}, {path.stat().st_size} bytes]"}

@@ -22,7 +22,6 @@ export function ChatPage() {
     error: voiceError,
   } = useVoice(sendAudio);
 
-  // Auto-create conversation
   useEffect(() => {
     if (!activeConversationId) {
       const id = createConversation();
@@ -59,23 +58,33 @@ export function ChatPage() {
   }, [createConversation, setActiveConversation]);
 
   return (
-    <div className="flex flex-col h-screen">
-      {/* Header */}
-      <ChatHeader
-        connectionState={connectionState}
-        onNewConversation={handleNewConversation}
-        onClearConversation={handleClearConversation}
-      />
+    <div className="flex flex-col h-full relative">
+      {/* Header with scan line */}
+      <div className="scan-line">
+        <ChatHeader
+          connectionState={connectionState}
+          onNewConversation={handleNewConversation}
+          onClearConversation={handleClearConversation}
+        />
+      </div>
 
-      {/* Waveform visualizer when listening */}
+      {/* Waveform visualizer - holographic when listening */}
       {isListening && (
-        <div className="px-4 py-2">
-          <WaveformVisualizer
-            isActive={true}
-            audioLevel={audioLevel}
-            barCount={48}
-            className="h-12"
-          />
+        <div className="px-4 py-3 animate-fade-in-down">
+          <div className="glass-panel px-4 py-3">
+            <div className="flex items-center gap-2 mb-2">
+              <span className="w-1.5 h-1.5 rounded-full bg-neon-blue shadow-[0_0_8px_rgba(0,212,255,0.6)] animate-pulse-glow" />
+              <span className="text-[10px] text-neon-blue uppercase tracking-widest font-medium">
+                Listening
+              </span>
+            </div>
+            <WaveformVisualizer
+              isActive={true}
+              audioLevel={audioLevel}
+              barCount={64}
+              className="h-14"
+            />
+          </div>
         </div>
       )}
 
@@ -83,7 +92,7 @@ export function ChatPage() {
       <ChatContainer />
 
       {/* Input area */}
-      <div className="px-4 pb-4 pt-2">
+      <div className="px-4 pb-4 pt-2 animate-fade-in-up">
         <ChatInput
           onSend={handleSendMessage}
           onVoiceToggle={handleVoiceToggle}
@@ -96,8 +105,13 @@ export function ChatPage() {
 
       {/* Voice error toast */}
       {voiceError && (
-        <div className="fixed bottom-24 left-1/2 -translate-x-1/2 glass-card px-4 py-2 z-50">
-          <p className="text-xs text-red-400">{voiceError}</p>
+        <div className="fixed bottom-28 left-1/2 -translate-x-1/2 z-50 animate-fade-in-up">
+          <div className="glass-panel-strong px-4 py-2.5 border border-red-500/20">
+            <div className="flex items-center gap-2">
+              <span className="w-1.5 h-1.5 rounded-full bg-neon-rose" />
+              <p className="text-xs text-red-300">{voiceError}</p>
+            </div>
+          </div>
         </div>
       )}
     </div>

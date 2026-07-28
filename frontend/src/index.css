@@ -3,33 +3,41 @@
 @tailwind utilities;
 
 /* ============================================
-   JARVIS - Futuristic AI Theme
+   JARVIS - Holographic AI Theme
+   Premium futuristic interface with neon accents,
+   glass morphism, and holographic effects
    ============================================ */
 
 @layer base {
   * {
-    @apply border-white/10;
+    @apply border-white/[0.06];
+  }
+
+  html {
+    @apply bg-surface text-gray-100;
   }
 
   body {
-    @apply bg-[#0a0a1a] text-gray-100 font-sans;
+    @apply bg-surface text-gray-100 font-sans antialiased;
     background-image:
-      radial-gradient(ellipse at 20% 50%, rgba(99, 102, 241, 0.05) 0%, transparent 50%),
-      radial-gradient(ellipse at 80% 50%, rgba(0, 212, 255, 0.05) 0%, transparent 50%),
-      linear-gradient(rgba(99, 102, 241, 0.02) 1px, transparent 1px),
+      /* Ambient glow - top left */ radial-gradient(ellipse 600px 400px at 0% 20%, rgba(99, 102, 241, 0.06) 0%, transparent 60%),
+      /* Ambient glow - bottom right */ radial-gradient(ellipse 500px 500px at 100% 80%, rgba(0, 212, 255, 0.04) 0%, transparent 60%),
+      /* Ambient glow - center */ radial-gradient(ellipse 300px 300px at 50% 50%, rgba(139, 92, 246, 0.03) 0%, transparent 60%),
+      /* Grid pattern */ linear-gradient(rgba(99, 102, 241, 0.02) 1px, transparent 1px),
       linear-gradient(90deg, rgba(99, 102, 241, 0.02) 1px, transparent 1px);
-    background-size: 100% 100%, 100% 100%, 40px 40px, 40px 40px;
+    background-size: 100% 100%, 100% 100%, 100% 100%, 40px 40px, 40px 40px;
     min-height: 100vh;
+    overflow-x: hidden;
   }
 
   ::selection {
-    @apply bg-jarvis-500/30 text-white;
+    @apply bg-jarvis-500/40 text-white;
   }
 
-  /* Custom Scrollbar */
+  /* Custom Scrollbar - futuristic thin style */
   ::-webkit-scrollbar {
-    width: 6px;
-    height: 6px;
+    width: 4px;
+    height: 4px;
   }
 
   ::-webkit-scrollbar-track {
@@ -37,33 +45,51 @@
   }
 
   ::-webkit-scrollbar-thumb {
-    @apply bg-white/10 rounded-full hover:bg-white/20 transition-colors;
+    @apply bg-white/8 rounded-full;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-white/15;
+  }
+
+  /* Focus styles */
+  *:focus-visible {
+    @apply outline-none ring-2 ring-jarvis-500/50 ring-offset-2 ring-offset-surface;
   }
 }
 
 @layer components {
-  /* Glass morphism card */
-  .glass-card {
+  /* ===== Glass Morphism ===== */
+  .glass-panel {
     @apply bg-white/[0.03] backdrop-blur-xl border border-white/[0.06] rounded-2xl;
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.05);
   }
 
-  .glass-card-hover {
-    @apply glass-card transition-all duration-300;
+  .glass-panel-strong {
+    @apply bg-white/[0.05] backdrop-blur-2xl border border-white/[0.08] rounded-2xl;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.08);
   }
 
-  .glass-card-hover:hover {
+  .glass-panel-hover {
+    @apply glass-panel transition-all duration-300 cursor-pointer;
+  }
+
+  .glass-panel-hover:hover {
     @apply bg-white/[0.06] border-white/[0.1];
-    box-shadow: 0 8px 32px rgba(99, 102, 241, 0.1);
+    box-shadow: 0 8px 32px rgba(99, 102, 241, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.08);
   }
 
-  /* Neon glow effects */
-  .glow-blue {
+  /* ===== Neon Glows ===== */
+  .glow-neon-blue {
     box-shadow: 0 0 20px rgba(0, 212, 255, 0.15), 0 0 40px rgba(0, 212, 255, 0.05);
   }
 
-  .glow-purple {
+  .glow-neon-purple {
     box-shadow: 0 0 20px rgba(139, 92, 246, 0.15), 0 0 40px rgba(139, 92, 246, 0.05);
+  }
+
+  .glow-neon-violet {
+    box-shadow: 0 0 20px rgba(99, 102, 241, 0.2), 0 0 40px rgba(99, 102, 241, 0.1);
   }
 
   .glow-text-blue {
@@ -74,7 +100,24 @@
     text-shadow: 0 0 20px rgba(139, 92, 246, 0.5), 0 0 40px rgba(139, 92, 246, 0.2);
   }
 
-  /* Animated gradient border */
+  .glow-text-violet {
+    text-shadow: 0 0 20px rgba(99, 102, 241, 0.4), 0 0 40px rgba(99, 102, 241, 0.15);
+  }
+
+  /* ===== Gradient Text ===== */
+  .text-gradient-primary {
+    @apply bg-clip-text text-transparent bg-gradient-to-r from-jarvis-400 via-neon-blue to-neon-purple;
+  }
+
+  .text-gradient-violet {
+    @apply bg-clip-text text-transparent bg-gradient-to-r from-jarvis-400 to-neon-purple;
+  }
+
+  .text-gradient-blue {
+    @apply bg-clip-text text-transparent bg-gradient-to-r from-neon-blue to-neon-cyan;
+  }
+
+  /* ===== Animated Border ===== */
   .gradient-border {
     position: relative;
     border-radius: 1rem;
@@ -86,14 +129,21 @@
     inset: 0;
     border-radius: inherit;
     padding: 1px;
-    background: linear-gradient(135deg, rgba(99, 102, 241, 0.3), rgba(0, 212, 255, 0.3), rgba(139, 92, 246, 0.3));
+    background: linear-gradient(135deg,
+      rgba(99, 102, 241, 0.4),
+      rgba(0, 212, 255, 0.4),
+      rgba(139, 92, 246, 0.4),
+      rgba(99, 102, 241, 0.4)
+    );
+    background-size: 300% 300%;
+    animation: holographicShimmer 4s linear infinite;
     -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
     -webkit-mask-composite: xor;
     mask-composite: exclude;
     pointer-events: none;
   }
 
-  /* Scan line effect */
+  /* ===== Scan Line ===== */
   .scan-line {
     position: relative;
     overflow: hidden;
@@ -105,65 +155,140 @@
     top: 0;
     left: 0;
     right: 0;
-    height: 2px;
-    background: linear-gradient(90deg, transparent, rgba(0, 212, 255, 0.3), transparent);
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(0, 212, 255, 0.2), rgba(99, 102, 241, 0.2), transparent);
     animation: scanLine 4s linear infinite;
     pointer-events: none;
+    z-index: 10;
   }
 
-  /* Text gradient */
-  .text-gradient {
-    @apply bg-clip-text text-transparent bg-gradient-to-r from-jarvis-400 via-accent-blue to-accent-purple;
+  /* ===== Holographic Shimmer ===== */
+  .holographic {
+    background: linear-gradient(
+      135deg,
+      rgba(99, 102, 241, 0.08) 0%,
+      rgba(0, 212, 255, 0.08) 25%,
+      rgba(139, 92, 246, 0.08) 50%,
+      rgba(0, 212, 255, 0.08) 75%,
+      rgba(99, 102, 241, 0.08) 100%
+    );
+    background-size: 200% 200%;
+    animation: holographicShimmer 6s linear infinite;
   }
 
-  /* Animated pulse ring */
+  /* ===== Pulse Ring ===== */
   .pulse-ring {
-    animation: pulseRing 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+    animation: ringExpand 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
   }
 
-  @keyframes pulseRing {
-    0% {
-      box-shadow: 0 0 0 0 rgba(0, 212, 255, 0.3);
-    }
-    70% {
-      box-shadow: 0 0 0 20px rgba(0, 212, 255, 0);
-    }
-    100% {
-      box-shadow: 0 0 0 0 rgba(0, 212, 255, 0);
-    }
+  /* ===== Message Bubbles ===== */
+  .msg-user {
+    @apply bg-gradient-to-r from-jarvis-600/90 to-jarvis-500/90 text-white rounded-2xl rounded-tr-[4px] px-4 py-3 max-w-[80%] ml-auto;
+    box-shadow: 0 4px 16px rgba(99, 102, 241, 0.15);
   }
 
-  /* Message bubble */
-  .message-bubble-user {
-    @apply bg-gradient-to-r from-jarvis-600 to-jarvis-700 text-white rounded-2xl rounded-tr-sm px-4 py-3 max-w-[80%] ml-auto;
+  .msg-assistant {
+    @apply glass-panel px-4 py-3 max-w-[80%] mr-auto rounded-tl-[4px];
   }
 
-  .message-bubble-assistant {
-    @apply glass-card px-4 py-3 max-w-[80%] mr-auto;
+  .msg-error {
+    @apply bg-red-500/10 border border-red-500/20 text-red-200 rounded-2xl rounded-tl-[4px] px-4 py-3 max-w-[80%] mr-auto;
   }
 
-  /* Status indicator */
+  /* ===== Status Dots ===== */
   .status-dot {
-    @apply w-2 h-2 rounded-full inline-block;
+    @apply w-2 h-2 rounded-full inline-block transition-all duration-300;
   }
 
-  .status-dot-active {
-    @apply status-dot bg-accent-green shadow-[0_0_10px_rgba(16,185,129,0.5)];
-    animation: pulseGlow 2s ease-in-out infinite;
+  .status-dot-connected {
+    @apply status-dot bg-neon-green shadow-[0_0_8px_rgba(16,185,129,0.5)];
   }
 
-  .status-dot-idle {
-    @apply status-dot bg-gray-500;
+  .status-dot-listening {
+    @apply status-dot bg-neon-blue shadow-[0_0_10px_rgba(0,212,255,0.6)] animate-pulse-glow;
   }
 
   .status-dot-processing {
-    @apply status-dot bg-accent-amber shadow-[0_0_10px_rgba(245,158,11,0.5)];
-    animation: pulseGlow 1s ease-in-out infinite;
+    @apply status-dot bg-neon-amber shadow-[0_0_10px_rgba(245,158,11,0.5)] animate-pulse-fast;
+  }
+
+  .status-dot-speaking {
+    @apply status-dot bg-neon-purple shadow-[0_0_10px_rgba(139,92,246,0.5)] animate-pulse-glow;
+  }
+
+  .status-dot-disconnected {
+    @apply status-dot bg-gray-600;
+  }
+
+  .status-dot-connecting {
+    @apply status-dot bg-neon-amber/50 animate-pulse-slow;
+  }
+
+  /* ===== Holographic Avatar ===== */
+  .hologram-avatar {
+    @apply relative flex items-center justify-center;
+  }
+
+  .hologram-avatar::before {
+    content: "";
+    @apply absolute inset-0 rounded-full;
+    background: conic-gradient(from 0deg, #6366f1, #00d4ff, #8b5cf6, #6366f1);
+    animation: spinReverse 4s linear infinite;
+    mask: radial-gradient(circle, transparent 55%, black 56%);
+    -webkit-mask: radial-gradient(circle, transparent 55%, black 56%);
+  }
+
+  /* ===== Neon Divider ===== */
+  .neon-divider {
+    @apply h-px w-full bg-gradient-to-r from-transparent via-jarvis-500/30 to-transparent;
+  }
+
+  /* ===== Glow Card (for important elements) ===== */
+  .glow-card {
+    @apply glass-panel relative overflow-hidden;
+  }
+
+  .glow-card::before {
+    content: "";
+    @apply absolute -top-1/2 -left-1/2 w-full h-full;
+    background: radial-gradient(circle, rgba(99, 102, 241, 0.08) 0%, transparent 70%);
+    pointer-events: none;
+  }
+
+  /* ===== Holographic Button ===== */
+  .btn-neon {
+    @apply relative overflow-hidden rounded-xl font-medium transition-all duration-300;
+    background: linear-gradient(135deg, rgba(99, 102, 241, 0.15), rgba(0, 212, 255, 0.15));
+    border: 1px solid rgba(99, 102, 241, 0.2);
+  }
+
+  .btn-neon:hover {
+    background: linear-gradient(135deg, rgba(99, 102, 241, 0.25), rgba(0, 212, 255, 0.25));
+    border-color: rgba(99, 102, 241, 0.4);
+    box-shadow: 0 0 20px rgba(99, 102, 241, 0.15);
+  }
+
+  .btn-neon:active {
+    transform: scale(0.98);
   }
 }
 
 @layer utilities {
   .text-balance {
     text-wrap: balance;
+  }
+
+  .bg-grid {
+    background-image: linear-gradient(rgba(99, 102, 241, 0.02) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(99, 102, 241, 0.02) 1px, transparent 1px);
+    background-size: 40px 40px;
+  }
+
+  .scrollbar-hidden {
+    scrollbar-width: none;
+  }
+
+  .scrollbar-hidden::-webkit-scrollbar {
+    display: none;
   }
 }

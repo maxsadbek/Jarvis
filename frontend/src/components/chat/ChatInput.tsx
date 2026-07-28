@@ -26,7 +26,6 @@ export function ChatInput({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const isProcessing = connectionState === "processing" || connectionState === "speaking";
 
-  // Auto-resize textarea
   useEffect(() => {
     const textarea = textareaRef.current;
     if (textarea) {
@@ -53,7 +52,10 @@ export function ChatInput({
   };
 
   return (
-    <div className="glass-card p-2">
+    <div className="glass-panel p-2 glow-neon-violet">
+      {/* Gradient border accent */}
+      <div className="h-px bg-gradient-to-r from-transparent via-jarvis-500/20 to-transparent mb-1 mx-1" />
+
       <div className="flex items-end gap-2">
         {/* Voice button */}
         <VoiceButton
@@ -75,17 +77,17 @@ export function ChatInput({
             disabled={disabled || isProcessing || isListening}
             rows={1}
             className={cn(
-              "w-full bg-transparent text-sm text-gray-100 placeholder-gray-500 resize-none",
+              "w-full bg-transparent text-sm text-gray-100 placeholder-gray-600 resize-none",
               "focus:outline-none px-3 py-3 max-h-[120px]",
-              "scrollbar-thin"
+              "scrollbar-hidden"
             )}
           />
 
           {/* AI badge */}
           {!input && !isListening && (
-            <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1 text-[10px] text-gray-600">
-              <Sparkles className="w-3 h-3" />
-              <span>AI-powered</span>
+            <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1.5 text-[10px] text-gray-700">
+              <Sparkles className="w-3 h-3 text-neon-blue" />
+              <span className="font-mono">AI</span>
             </div>
           )}
         </div>
@@ -96,7 +98,7 @@ export function ChatInput({
           disabled={!input.trim() || disabled || isProcessing}
           variant="primary"
           size="sm"
-          className="rounded-xl px-3"
+          className="rounded-xl px-3 h-10"
         >
           <Send className="w-4 h-4" />
         </Button>

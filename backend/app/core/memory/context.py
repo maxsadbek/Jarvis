@@ -1,29 +1,31 @@
 """Context Manager.
 
 Builds the context window for LLM requests by combining:
-- System prompt
+- Personalized user context (preferences, facts, habits)
 - Recent conversation history
 - Relevant past memories
 """
 
 from __future__ import annotations
 
-from typing import Optional
+from typing import Any, Optional
 
 from loguru import logger
 
 from backend.app.config import settings
-from backend.app.core.memory.vector import VectorMemory
+from backend.app.core.memory.manager import MemoryManager
 from backend.app.models.schemas import Message, MessageRole
 
 
 class ContextManager:
-    """Manages conversation context for the AI engine."""
+    """Manages conversation context for the AI engine.
 
-    def __init__(self, memory_backend: Optional[VectorMemory] = None) -> None:
-        self._memory = memory_backend
-        self._max_history = 50  # Max messages to keep in context
-        self._max_memory_results = 5  # Max memory results to include
+    Uses the MemoryManager to build personalized context
+    with preferences, facts, habits, and relevant memories.
+    """
+
+    def __init__(self, memory_manager: Optional[MemoryManager] = None) -> None:
+        self._memory = memory_manager
 
     async def build_context(
         self,
@@ -31,6 +33,9 @@ class ContextManager:
         current_message: str,
     ) -> list[Message]:
         """Build the full context for an LLM request.
+
+        Uses the MemoryManager's get_context() for personalized
+        context with preferences, facts, habits, and memories.
 
         Args:
             conversation_id: Current conversation ID.
@@ -41,40 +46,19 @@ class ContextManager:
         """
         messages: list[Message] = []
 
-        # 1. Add relevant past memories (long-term context)
         if self._memory and settings.MEMORY_ENABLED:
             try:
-                memories = await self._memory.search(
-                    query=current_message,
-                    limit=self._max_memory_results,
-                    threshold=settings.MEMORY_RELEVANCE_THRESHOLD,
-                )
-                if memories:
-                    memory_context = "Relevant past memories:\n"
-                    for m in memories:
-                        memory_context += f"- [{m.timestamp.strftime('%Y-%m-%d %H:%M')}] {m.content[:200]}\n"
-                    messages.append(
-                        Message(
-                            role=MessageRole.SYSTEM,
-                            content=memory_context,
-                            metadata={"type": "memory_context"},
-                        )
-                    )
-            except Exception as e:
-                logger.warning(f"Failed to retrieve memories: {e}")
-
-        # 2. Add recent conversation history
-        if self._memory:
-            try:
-                history = await self._memory.get_conversation_history(
+                # Use MemoryManager to get full personalized context
+                context = await self._memory.get_context(
                     conversation_id=conversation_id,
-                    limit=self._max_history,
+                    current_message=current_message,
                 )
-                messages.extend(history)
+                messages.extend(context)
+                return messages
             except Exception as e:
-                logger.warning(f"Failed to get conversation history: {e}")
+                logger.warning(f"Failed to build memory context: {e}")
 
-        # 3. Add the current user message
+        # Fallback: add the user message directly
         messages.append(
             Message(
                 role=MessageRole.USER,
@@ -83,13 +67,3 @@ class ContextManager:
         )
 
         return messages
-
-    async def extract_key_points(self, text: str) -> list[str]:
-        """Extract key points from a text for memory storage."""
-        # Simple extraction - can be enhanced with NLP later
-        sentences = text.replace("\n", " ").split(".")
-        key_points = [
-            s.strip() for s in sentences
-            if len(s.strip()) > 30 and "I" in s or "you" in s or "remember" in s
-        ]
-        return key_points[:3]

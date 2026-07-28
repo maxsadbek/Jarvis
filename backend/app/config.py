@@ -74,6 +74,8 @@ class Settings(BaseSettings):
     WAKE_WORD: str = "jarvis"
     WAKE_WORD_SENSITIVITY: float = 0.5
     WAKE_WORD_TIMEOUT: int = 10  # Seconds to listen after wake word
+    WAKE_WORD_ENGINE: str = "energy"  # "energy" | "porcupine" | "snowboy"
+    PORCUPINE_API_KEY: Optional[str] = None  # Optional, for Picovoice Porcupine
 
     # --- Memory ---
     MEMORY_ENABLED: bool = True
@@ -82,6 +84,12 @@ class Settings(BaseSettings):
     MEMORY_PERSIST_DIR: str = "data/memory"
     MEMORY_MAX_RESULTS: int = 10
     MEMORY_RELEVANCE_THRESHOLD: float = 0.6
+    MEMORY_SHORT_TERM_SIZE: int = 50  # Max messages in short-term buffer
+    MEMORY_MAX_CONVERSATIONS: int = 10  # Max active conversations
+    MEMORY_FACT_EXTRACTION_ENABLED: bool = True  # Auto-extract facts
+    MEMORY_HABIT_LEARNING_ENABLED: bool = True  # Learn user habits
+    MEMORY_IMPORTANCE_DECAY_MINUTES: int = 30  # How fast importance decays
+    MEMORY_CONTEXT_WINDOW_SECONDS: int = 3600  # 1 hour before summarization
 
     # --- Authentication ---
     AUTH_ENABLED: bool = False
@@ -110,7 +118,18 @@ class Settings(BaseSettings):
         "code_exec",
         "system_ctl",
         "browser",
+        "command_runner",
     ]
+
+    # --- Security & Automation ---
+    SECURITY_AUDIT_ENABLED: bool = True  # Audit all tool executions
+    SECURITY_MAX_EXECUTION_TIME: int = 60  # Max seconds for tool execution
+    SECURITY_REQUIRE_CONFIRMATION: bool = True  # Require confirm for risky actions
+    SECURITY_MAX_CONCURRENT_TOOLS: int = 5  # Max parallel tool executions
+    SECURITY_COMMAND_SANDBOX_ENABLED: bool = True  # Sandbox command execution
+    AUTOMATION_ENABLED: bool = True  # Enable task automation engine
+    AUTOMATION_MAX_TASKS: int = 50  # Max stored automation tasks
+    AUTOMATION_MAX_STEPS_PER_TASK: int = 20  # Max steps per task
 
     # --- Plugin System ---
     PLUGINS_ENABLED: bool = False
