@@ -10,6 +10,7 @@ Orchestrates all AI operations:
 from __future__ import annotations
 
 import time
+import uuid
 from typing import Any, AsyncGenerator, Optional
 
 from loguru import logger
@@ -28,6 +29,9 @@ from backend.app.models.schemas import (
     SystemStatus,
 )
 from backend.app.tools.base import ToolRegistry
+from backend.app.tools.automation import AutomationEngine
+from backend.app.intents import IntentProcessor, CommandIntent
+from backend.app.plugins import PluginRegistry
 
 
 class AIEngine:
@@ -36,8 +40,12 @@ class AIEngine:
     def __init__(self) -> None:
         self._llm_provider: Optional[LLMProvider] = None
         self._memory: Optional[MemoryManager] = None
+        self._memory_ready: bool = False
         self._context_manager: Optional[ContextManager] = None
         self._tool_registry: Optional[ToolRegistry] = None
+        self._automation: Optional[AutomationEngine] = None
+        self._intent_processor: Optional[IntentProcessor] = None
+        self._plugin_registry: Optional[PluginRegistry] = None
         self._start_time: float = time.time()
         self._state: ConnectionState = ConnectionState.DISCONNECTED
 
@@ -68,8 +76,15 @@ class AIEngine:
         if settings.MEMORY_ENABLED:
             logger.info("Initializing memory system...")
             self._memory = MemoryManager()
-            await self._memory.initialize(llm_provider=self._llm_provider)
-            logger.info("Memory system ready")
+            memory_ok = await self._memory.initialize(llm_provider=self._llm_provider)
+            if memory_ok:
+                self._memory_ready = True
+                logger.info("Memory system ready")
+            else:
+                self._memory_ready = False
+                logger.warning("Memory system initialized with degraded functionality")
+        else:
+            self._memory_ready = False
 
         # 3. Initialize context manager (uses MemoryManager)
         self._context_manager = ContextManager(self._memory)
@@ -80,6 +95,21 @@ class AIEngine:
             self._tool_registry = ToolRegistry()
             await self._tool_registry.initialize()
             logger.info(f"Tool registry ready with {len(self._tool_registry.tools)} tools")
+
+            # 5. Initialize automation engine if tools are enabled
+            if settings.AUTOMATION_ENABLED:
+                self._automation = AutomationEngine(tool_registry=self._tool_registry)
+                await self._automation.initialize()
+                logger.info("Automation engine ready")
+
+        # 6. Initialize intent processor (natural language command router)
+        self._intent_processor = IntentProcessor(llm_provider=self._llm_provider)
+        logger.info("Intent processor ready")
+
+        # 7. Initialize plugin system
+        self._plugin_registry = PluginRegistry()
+        plugin_count = await self._plugin_registry.discover_and_load()
+        logger.info(f"Plugin registry ready: {plugin_count} plugins")
 
         logger.info("JARVIS AI Engine initialization complete")
 
@@ -97,7 +127,8 @@ class AIEngine:
 
     @property
     def memory(self) -> Optional[MemoryManager]:
-        return self._memory
+        """Get the memory manager (only if successfully initialized)."""
+        return self._memory if self._memory_ready else None
 
     async def chat(
         self,
@@ -109,7 +140,8 @@ class AIEngine:
         """Process a chat message and return AI response.
 
         Uses the MemoryManager for personalized context and
-        automatic memory storage.
+        automatic memory storage. Runs intent detection first
+        for fast command routing without LLM.
 
         Args:
             message: The user's message.
@@ -130,7 +162,26 @@ class AIEngine:
 
         self.state = ConnectionState.PROCESSING
 
-        # Build context using MemoryManager for personalized results
+        # ── Stage 1: Intent Detection (fast path) ──
+        if self._intent_processor:
+            intent = await self._intent_processor.process(message)
+
+            if intent.intent != CommandIntent.CHAT and intent.intent != CommandIntent.UNKNOWN:
+                # Handle via tool directly
+                result = await self._execute_intent(intent, conversation_id)
+                self.state = ConnectionState.CONNECTED
+                return Message(
+                    role=MessageRole.ASSISTANT,
+                    type=MessageType.TEXT,
+                    content=result,
+                    metadata={
+                        "conversation_id": conversation_id,
+                        "intent": intent.intent.value,
+                        "tool": intent.tool_name,
+                    },
+                )
+
+        # ── Stage 2: Build context using MemoryManager ──
         context_messages = await self._context_manager.build_context(
             conversation_id=conversation_id,
             current_message=message,
@@ -142,8 +193,9 @@ class AIEngine:
             content=message,
             metadata={"conversation_id": conversation_id},
         )
-        if self._memory:
-            await self._memory.process_message(user_msg, conversation_id)
+        mem = self.memory
+        if mem:
+            await mem.process_message(user_msg, conversation_id)
 
         if stream:
             return self._stream_response(context_messages, conversation_id, model)
@@ -156,8 +208,8 @@ class AIEngine:
             response.metadata["conversation_id"] = conversation_id
 
             # Store assistant response via MemoryManager
-            if self._memory:
-                await self._memory.process_message(response, conversation_id)
+            if mem:
+                await mem.process_message(response, conversation_id)
 
             self.state = ConnectionState.CONNECTED
             return response
@@ -179,13 +231,14 @@ class AIEngine:
                 yield token
         finally:
             # Store the complete response
-            if self._memory and full_response:
+            mem = self.memory
+            if mem and full_response:
                 response_msg = Message(
                     role=MessageRole.ASSISTANT,
                     content=full_response,
                     metadata={"conversation_id": conversation_id},
                 )
-                await self._memory.process_message(response_msg, conversation_id)
+                await mem.process_message(response_msg, conversation_id)
             self.state = ConnectionState.CONNECTED
 
     async def get_status(self) -> SystemStatus:
@@ -193,9 +246,10 @@ class AIEngine:
         import psutil
 
         memory_stats = {}
-        if self._memory:
+        mem = self.memory
+        if mem:
             try:
-                memory_stats = await self._memory.get_stats()
+                memory_stats = await mem.get_stats()
             except Exception:
                 pass
 
@@ -204,7 +258,7 @@ class AIEngine:
             llm_model=settings.OPENROUTER_MODEL if self.is_llm_ready else None,
             stt_ready=True,
             tts_ready=True,
-            memory_ready=self._memory is not None,
+            memory_ready=self._memory_ready,
             tools_loaded=list(self._tool_registry.tools.keys()) if self._tool_registry else [],
             cpu_usage=psutil.cpu_percent(interval=0.1),
             memory_usage=psutil.virtual_memory().percent,
@@ -213,29 +267,141 @@ class AIEngine:
 
     async def get_memory_stats(self) -> dict[str, Any]:
         """Get memory system statistics."""
-        if self._memory:
-            return await self._memory.get_stats()
+        mem = self.memory
+        if mem:
+            return await mem.get_stats()
         return {"error": "Memory not available"}
 
     async def clear_memory(self) -> bool:
         """Clear all memories."""
-        if self._memory:
-            await self._memory.clear()
+        mem = self.memory
+        if mem:
+            await mem.clear()
             return True
         return False
 
     async def search_memories(self, query: str, limit: int = 5) -> list[Any]:
         """Search stored memories."""
-        if self._memory:
-            return await self._memory.search(query=query, limit=limit)
+        mem = self.memory
+        if mem:
+            return await mem.search(query=query, limit=limit)
         return []
+
+    async def _execute_intent(self, intent: IntentResult, conversation_id: str) -> str:
+        """Execute a command intent via the tool system.
+
+        Args:
+            intent: Parsed intent with tool, action, params.
+            conversation_id: Current conversation.
+
+        Returns:
+            Human-readable result string.
+        """
+        logger.info(f"Executing intent: {intent.intent.value} → {intent.tool_name}.{intent.action}")
+
+        # ── Redirect: system_ctl open_app/open_website → app_control (backward compat) ──
+        if intent.tool_name == "system_ctl" and intent.action in ("open_app", "open_website", "open_url"):
+            intent.tool_name = "app_control"
+            intent.action = "open_url" if intent.action == "open_website" else "open"
+            logger.info(f"  Redirected to {intent.tool_name}.{intent.action}")
+
+        # ── Handle memory intents directly (not through tool registry) ──
+        if intent.tool_name == "memory":
+            return await self._handle_memory_intent(intent)
+
+        # ── Handle new control modules directly (not in ToolRegistry) ──
+        direct_tools = {
+            "app_control": ("backend.app.tools.control.app_control", "AppControlTool"),
+            "system_control": ("backend.app.tools.control.system_control", "SystemControlTool"),
+            "system": ("backend.app.tools.control.system_control", "SystemControlTool"),
+            "media_control": ("backend.app.tools.control.media_control", "MediaControlTool"),
+            "file_control": ("backend.app.tools.control.file_control", "FileControlTool"),
+            "developer": ("backend.app.tools.control.developer_mode", "DeveloperModeTool"),
+        }
+
+        if intent.tool_name in direct_tools:
+            import importlib
+            module_path, class_name = direct_tools[intent.tool_name]
+            try:
+                module = importlib.import_module(module_path)
+                tool_cls = getattr(module, class_name)
+                tool = tool_cls()
+                result = await tool.execute(**{**intent.params, "action": intent.action})
+                if result.get("success"):
+                    return result.get("result", "Done!")
+                return result.get("error", "Command failed")
+            except Exception as e:
+                logger.error(f"Direct tool execution failed: {e}")
+                return f"Command failed: {str(e)}"
+
+        # ── Handle via existing ToolRegistry (system_ctl, browser, web_search, etc.) ──
+        if self._tool_registry:
+            from backend.app.models.schemas import ToolCall, ToolName
+
+            tool_name_map = {
+                "system_ctl": ToolName.SYSTEM_CTL,
+                "browser": ToolName.BROWSER,
+                "web_search": ToolName.WEB_SEARCH,
+                "file_ops": ToolName.FILE_OPS,
+                "command_runner": ToolName.COMMAND_RUNNER,
+                "code_exec": ToolName.CODE_EXEC,
+            }
+
+            tn = tool_name_map.get(intent.tool_name, ToolName.WEB_SEARCH)
+            tc = ToolCall(
+                id=uuid.uuid4().hex,
+                name=tn,
+                arguments={**intent.params, "action": intent.action},
+            )
+            result = await self._tool_registry.execute_tool(tool_call=tc, auto_confirm=True)
+
+            if result.status == "completed":
+                return result.result or "Done!"
+            elif result.status == "denied":
+                return f"I can't do that: {result.error}"
+            elif result.status == "error":
+                return f"Command failed: {result.error}"
+
+        return "Tool system not available."
+
+    async def _handle_memory_intent(self, intent: IntentResult) -> str:
+        """Handle memory-related intents directly."""
+        mem = self.memory
+        if not mem:
+            return "Memory system not available."
+
+        if intent.action == "save_name":
+            if "=" in intent.params.get("content", ""):
+                name = intent.params["content"].split("=")[1].strip()
+                profile = await mem.get_profile()
+                await profile.set_field("name", name)
+                return f"Запомнил! Ваше имя {name}."
+            return "Запомнил!"
+
+        if intent.action == "save":
+            await mem.add_fact(
+                fact_text=intent.params.get("content", ""),
+                category="general",
+            )
+            return "Saved to memory."
+
+        if intent.action == "recall":
+            facts = await mem.get_facts(limit=5)
+            if facts:
+                return "Important things I remember: " + "; ".join(f.fact for f in facts)
+            return "I don't have any saved memories yet."
+
+        return "Processing memory request..."
 
     async def shutdown(self) -> None:
         """Gracefully shut down the engine."""
         logger.info("Shutting down JARVIS engine...")
         if hasattr(self._llm_provider, "close"):
             await self._llm_provider.close()
-        if self._memory:
-            await self._memory.shutdown()
+        mem = self.memory
+        if mem:
+            await mem.shutdown()
+        if self._plugin_registry:
+            await self._plugin_registry.shutdown_all()
         self.state = ConnectionState.DISCONNECTED
         logger.info("JARVIS engine shutdown complete")

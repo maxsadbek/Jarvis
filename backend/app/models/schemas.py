@@ -169,6 +169,7 @@ class UserPreference(BaseModel):
     value: Any
     category: str = "general"  # general | voice | appearance | privacy | ai
     description: Optional[str] = None
+    access_count: int = 0  # How many times this was accessed (for habit tracking)
     updated_at: datetime = Field(default_factory=datetime.now)
     created_at: datetime = Field(default_factory=datetime.now)
 

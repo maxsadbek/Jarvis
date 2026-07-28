@@ -1,0 +1,73 @@
+# JARVIS Desktop - Electron Builder Configuration
+# Builds a standalone Jarvis.exe for Windows
+
+appId: com.jarvis.desktop
+productName: Jarvis
+copyright: Copyright © 2025 JARVIS Team
+
+directories:
+  output: release
+  buildResources: resources
+
+files:
+  - dist/**/*
+  - config/**/*
+  - public/**/*
+  - package.json
+
+extraResources:
+  - from: config
+    to: config
+    filter:
+      - "**/*"
+  - from: ../scripts
+    to: scripts
+    filter:
+      - "**/*"
+  - from: ../backend
+    to: backend
+    filter:
+      - "**/*.py"
+      - "**/requirements.txt"
+      - "**/.env"
+      - "!**/__pycache__/**"
+      - "!**/.venv/**"
+      - "!**/venv/**"
+      - "!**/node_modules/**"
+      - "!**/.git/**"
+  - from: .
+    to: desktop
+    filter:
+      - "package.json"
+      - "dist/**/*"
+      - "config/**/*"
+
+win:
+  target:
+    - target: nsis
+      arch:
+        - x64
+  icon: resources/icon.ico
+  artifactName: "Jarvis-Setup-${version}.${ext}"
+  signAndEditExecutable: false
+
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: "Jarvis AI Assistant"
+  uninstallDisplayName: "Jarvis AI Assistant"
+  runAfterFinish: true
+  installerIcon: resources/icon.ico
+  uninstallerIcon: resources/icon.ico
+  installerHeaderIcon: resources/icon.ico
+
+asar: true
+asarUnpack:
+  - "config/**/*"
+
+compression: normal
+npmRebuild: true
+removePackageScripts: true

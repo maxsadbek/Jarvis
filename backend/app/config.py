@@ -11,11 +11,22 @@ from typing import Optional
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
+# ── Locate .env relative to this file, not relative to CWD ─────────────────
+# This ensures the .env is found regardless of where uvicorn is launched from.
+_config_dir = Path(__file__).resolve().parent  # backend/app/
+_env_candidates = [
+    _config_dir.parent.parent / ".env",          # Jarvis/.env (project root)
+    _config_dir.parent / ".env",                 # backend/.env
+    Path.cwd() / ".env",
+]
+_env_path = next((p for p in _env_candidates if p.exists()), _env_candidates[0])
+
+
 class Settings(BaseSettings):
     """Application settings loaded from environment variables."""
 
     model_config = SettingsConfigDict(
-        env_file=".env",
+        env_file=str(_env_path),
         env_file_encoding="utf-8",
         case_sensitive=False,
         extra="ignore",
@@ -77,6 +88,18 @@ class Settings(BaseSettings):
     WAKE_WORD_ENGINE: str = "energy"  # "energy" | "porcupine" | "snowboy"
     PORCUPINE_API_KEY: Optional[str] = None  # Optional, for Picovoice Porcupine
 
+    # --- Voice Manager (prerecorded clips & TTS fallback) ---
+    VOICE_MANAGER_ENABLED: bool = True  # Enable the professional voice manager
+    VOICE_ASSETS_DIR: str = "assets/voices/jarvis"  # System sound WAV directory
+    VOICE_PHRASES_DIR: str = "assets/voices/jarvis/phrases"  # Phrase WAV directory
+    VOICE_CACHE_DIR: str = "data/voice_cache"  # Generated TTS cache directory
+    VOICE_MASTER_VOLUME: float = 0.8  # Master volume (0.0-1.0)
+    VOICE_DEFAULT_FADE_IN_MS: int = 0  # Default fade-in ms for system sounds
+    VOICE_DEFAULT_FADE_OUT_MS: int = 0  # Default fade-out ms for system sounds
+    VOICE_STARTUP_GREETING_ENABLED: bool = True  # Play greeting on startup
+    VOICE_STARTUP_USER_NAME: str = "Максад"  # User name for startup greeting
+    VOICE_STARTUP_LANGUAGE: str = "ru"  # Greeting language (ru, en, uz)
+
     # --- Memory ---
     MEMORY_ENABLED: bool = True
     MEMORY_BACKEND: str = "chroma"  # "chroma" | "json" | "none"
@@ -119,6 +142,12 @@ class Settings(BaseSettings):
         "system_ctl",
         "browser",
         "command_runner",
+        # Desktop control modules
+        "app_control",
+        "system_control",
+        "file_control",
+        "media_control",
+        "developer",
     ]
 
     # --- Security & Automation ---
@@ -132,7 +161,7 @@ class Settings(BaseSettings):
     AUTOMATION_MAX_STEPS_PER_TASK: int = 20  # Max steps per task
 
     # --- Plugin System ---
-    PLUGINS_ENABLED: bool = False
+    PLUGINS_ENABLED: bool = True
     PLUGINS_DIR: str = "plugins"
     ENABLED_PLUGINS: list[str] = []
 

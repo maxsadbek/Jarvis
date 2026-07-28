@@ -10,6 +10,7 @@ from typing import Callable
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import Response
 from loguru import logger
 from starlette.middleware.base import BaseHTTPMiddleware
 
@@ -39,7 +40,7 @@ def setup_middleware(app: FastAPI) -> None:
         """Log all API requests."""
         start_time = time.time()
 
-        response = await call_next(request)
+        response: Response = await call_next(request)
 
         elapsed = (time.time() - start_time) * 1000
         logger.info(

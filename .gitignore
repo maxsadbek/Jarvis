@@ -42,3 +42,5 @@ desktop.ini
 dist/
 build/
 *.egg-info/
+
+data/models/

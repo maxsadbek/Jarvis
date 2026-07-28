@@ -12,7 +12,7 @@ from __future__ import annotations
 import uuid
 from typing import Any, Optional
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Request
 from loguru import logger
 
 from backend.app.models.schemas import (
@@ -26,9 +26,12 @@ from backend.app.models.schemas import (
 router = APIRouter(prefix="/api/tools", tags=["tools"])
 
 
-def get_engine():
-    """Get engine from app state (set in main.py)."""
-    raise NotImplementedError("Set in main.py")
+def _get_engine(request: Request):
+    """Get the AI engine from FastAPI app state."""
+    engine = getattr(request.app.state, "engine", None)
+    if engine is None:
+        raise HTTPException(status_code=503, detail="Engine not initialized")
+    return engine
 
 
 # --- Tool Execution ---
@@ -36,19 +39,20 @@ def get_engine():
 
 @router.post("/execute")
 async def execute_tool(
+    request: Request,
     tool_name: str = Query(..., description="Tool name"),
     action: str = Query(..., description="Action to perform"),
     params: dict[str, Any] = {},
     auto_confirm: bool = Query(False, description="Auto-confirm risky actions"),
 ) -> ToolCall:
     """Execute a tool directly."""
-    engine = get_engine()
+    engine = _get_engine(request)
     if not engine or not engine._tool_registry:
         raise HTTPException(status_code=503, detail="Tool system not available")
 
     # Create tool call
     tool_call = ToolCall(
-        id=str(uuid.uuid4()),
+        id=uuid.uuid4().hex,
         name=ToolName(tool_name),
         arguments={**params, "action": action},
     )
@@ -63,11 +67,12 @@ async def execute_tool(
 
 @router.post("/confirm")
 async def confirm_tool_execution(
+    request: Request,
     tool_call_id: str = Query(...),
     session_id: str = Query(...),
 ) -> dict:
     """Confirm a pending tool execution (for high-risk actions)."""
-    engine = get_engine()
+    engine = _get_engine(request)
     if not engine or not engine._tool_registry:
         raise HTTPException(status_code=503, detail="Tool system not available")
 
@@ -83,9 +88,9 @@ async def confirm_tool_execution(
 
 
 @router.get("/list")
-async def list_tools() -> list[dict[str, Any]]:
+async def list_tools(request: Request) -> list[dict[str, Any]]:
     """List all available tools with their capabilities."""
-    engine = get_engine()
+    engine = _get_engine(request)
     if not engine or not engine._tool_registry:
         raise HTTPException(status_code=503, detail="Tool system not available")
 
@@ -106,12 +111,13 @@ async def list_tools() -> list[dict[str, Any]]:
 
 @router.get("/audit", response_model=list[AuditEntry])
 async def get_audit_log(
+    request: Request,
     tool_name: Optional[str] = Query(None),
     status: Optional[str] = Query(None),
     limit: int = Query(50, ge=1, le=200),
 ) -> list[AuditEntry]:
     """View the audit log for tool executions."""
-    engine = get_engine()
+    engine = _get_engine(request)
     if not engine or not engine._tool_registry:
         raise HTTPException(status_code=503, detail="Tool system not available")
 
@@ -127,9 +133,9 @@ async def get_audit_log(
 
 
 @router.get("/audit/stats")
-async def get_audit_stats() -> dict:
+async def get_audit_stats(request: Request) -> dict:
     """Get audit log statistics."""
-    engine = get_engine()
+    engine = _get_engine(request)
     if not engine or not engine._tool_registry:
         raise HTTPException(status_code=503, detail="Tool system not available")
 
@@ -144,9 +150,9 @@ async def get_audit_stats() -> dict:
 
 
 @router.get("/permissions/rules", response_model=list[PermissionRule])
-async def get_permission_rules() -> list[PermissionRule]:
+async def get_permission_rules(request: Request) -> list[PermissionRule]:
     """Get all permission rules."""
-    engine = get_engine()
+    engine = _get_engine(request)
     if not engine or not engine._tool_registry:
         raise HTTPException(status_code=503, detail="Tool system not available")
 
@@ -158,9 +164,12 @@ async def get_permission_rules() -> list[PermissionRule]:
 
 
 @router.post("/permissions/rules")
-async def add_permission_rule(rule: PermissionRule) -> PermissionRule:
+async def add_permission_rule(
+    request: Request,
+    rule: PermissionRule,
+) -> PermissionRule:
     """Add a permission rule."""
-    engine = get_engine()
+    engine = _get_engine(request)
     if not engine or not engine._tool_registry:
         raise HTTPException(status_code=503, detail="Tool system not available")
 
@@ -173,9 +182,12 @@ async def add_permission_rule(rule: PermissionRule) -> PermissionRule:
 
 
 @router.delete("/permissions/rules/{rule_id}")
-async def remove_permission_rule(rule_id: str) -> dict:
+async def remove_permission_rule(
+    request: Request,
+    rule_id: str,
+) -> dict:
     """Remove a permission rule."""
-    engine = get_engine()
+    engine = _get_engine(request)
     if not engine or not engine._tool_registry:
         raise HTTPException(status_code=503, detail="Tool system not available")
 
@@ -192,11 +204,12 @@ async def remove_permission_rule(rule_id: str) -> dict:
 
 @router.get("/automation/tasks", response_model=list[AutomationTask])
 async def get_automation_tasks(
+    request: Request,
     tag: Optional[str] = Query(None),
     enabled_only: bool = Query(False),
 ) -> list[AutomationTask]:
     """Get all automation tasks."""
-    engine = get_engine()
+    engine = _get_engine(request)
     if not engine or not engine._tool_registry:
         raise HTTPException(status_code=503, detail="Tool system not available")
 
@@ -205,6 +218,7 @@ async def get_automation_tasks(
 
 @router.post("/automation/tasks")
 async def create_automation_task(
+    request: Request,
     name: str = Query(...),
     description: Optional[str] = Query(None),
     steps: list[dict[str, Any]] = [],
@@ -212,7 +226,7 @@ async def create_automation_task(
     tags: Optional[list[str]] = Query(None),
 ) -> AutomationTask:
     """Create a new automation task."""
-    engine = get_engine()
+    engine = _get_engine(request)
     if not engine or not engine._tool_registry:
         raise HTTPException(status_code=503, detail="Tool system not available")
 
@@ -226,9 +240,12 @@ async def create_automation_task(
 
 
 @router.post("/automation/tasks/{task_id}/execute")
-async def execute_automation_task(task_id: str) -> dict:
+async def execute_automation_task(
+    request: Request,
+    task_id: str,
+) -> dict:
     """Execute an automation task."""
-    engine = get_engine()
+    engine = _get_engine(request)
     if not engine or not engine._tool_registry:
         raise HTTPException(status_code=503, detail="Tool system not available")
 
@@ -237,9 +254,12 @@ async def execute_automation_task(task_id: str) -> dict:
 
 
 @router.delete("/automation/tasks/{task_id}")
-async def delete_automation_task(task_id: str) -> dict:
+async def delete_automation_task(
+    request: Request,
+    task_id: str,
+) -> dict:
     """Delete an automation task."""
-    engine = get_engine()
+    engine = _get_engine(request)
     if not engine or not engine._tool_registry:
         raise HTTPException(status_code=503, detail="Tool system not available")
 

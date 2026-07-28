@@ -19,6 +19,18 @@ from backend.app.config import settings
 from backend.app.models.schemas import UserPreference
 
 
+def _serialize_pref(pref: UserPreference) -> dict[str, Any]:
+    """Serialize a UserPreference to a JSON-safe dict.
+
+    Converts datetime objects to ISO format strings for TinyDB compatibility.
+    """
+    data = pref.model_dump()
+    for key in ("created_at", "updated_at"):
+        if key in data and isinstance(data[key], datetime):
+            data[key] = data[key].isoformat()
+    return data
+
+
 # Default preferences with descriptions
 DEFAULT_PREFERENCES: dict[str, tuple[Any, str, str]] = {
     # General
@@ -67,6 +79,13 @@ class UserPreferences:
 
             # Load all stored preferences
             for item in self._table.all():
+                # Parse datetime fields from ISO format strings
+                for date_key in ("created_at", "updated_at"):
+                    if date_key in item and isinstance(item[date_key], str):
+                        try:
+                            item[date_key] = datetime.fromisoformat(item[date_key])
+                        except (ValueError, TypeError):
+                            pass
                 pref = UserPreference(**item)
                 self._preferences[pref.key] = pref
 
@@ -81,7 +100,7 @@ class UserPreferences:
                     )
                     self._preferences[key] = pref
                     self._table.upsert(
-                        pref.model_dump(),
+                        _serialize_pref(pref),
                         Pref.key == key,
                     )
 
@@ -166,7 +185,7 @@ class UserPreferences:
         try:
             if self._table:
                 from tinydb import Query
-                self._table.upsert(pref.model_dump(), Query().key == key)
+                self._table.upsert(_serialize_pref(pref), Query().key == key)
         except Exception as e:
             logger.warning(f"Failed to persist preference '{key}': {e}")
 
@@ -255,7 +274,7 @@ class UserPreferences:
                 self._table = self._db.table("user_preferences")
                 from tinydb import Query
                 for pref in self._preferences.values():
-                    self._table.upsert(pref.model_dump(), Query().key == pref.key)
+                    self._table.upsert(_serialize_pref(pref), Query().key == pref.key)
         except Exception:
             pass
         logger.info("Preferences reset to defaults")

@@ -1,0 +1,36 @@
+{
+  "name": "Jarvis",
+  "version": "0.1.0",
+  "startupGreeting": true,
+  "language": "ru",
+  "greetings": {
+    "ru": "Добро пожаловать, Maxsad. Все системы работают. Чем могу помочь?",
+    "en": "Welcome back, Maxsad. All systems are operational. How can I assist you?",
+    "uz": "Xush kelibsiz, Maxsad. Barcha tizimlar ishlaydi. Qanday yordam bera olaman?"
+  },
+  "window": {
+    "width": 480,
+    "height": 640,
+    "alwaysOnTop": true,
+    "opacity": 0.92,
+    "transparent": true,
+    "frameless": true
+  },
+  "backend": {
+    "url": "http://127.0.0.1:8000",
+    "healthEndpoint": "/api/health",
+    "connectionTimeout": 5000,
+    "reconnectInterval": 3000,
+    "pythonPath": "",
+    "projectRoot": ""
+  },
+  "shortcuts": {
+    "activate": "CommandOrControl+Space",
+    "toggleWindow": "CommandOrControl+Shift+J"
+  },
+  "startup": {
+    "autoStart": true,
+    "minimizeToTray": true,
+    "startMinimized": true
+  }
+}

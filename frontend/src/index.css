@@ -2,6 +2,10 @@
 @tailwind components;
 @tailwind utilities;
 
+body {
+  background: #070711;
+  color: white;
+}
 /* ============================================
    JARVIS - Holographic AI Theme
    Premium futuristic interface with neon accents,
@@ -45,11 +49,11 @@
   }
 
   ::-webkit-scrollbar-thumb {
-    @apply bg-white/8 rounded-full;
+    @apply bg-white/[0.08] rounded-full;
   }
 
   ::-webkit-scrollbar-thumb:hover {
-    @apply bg-white/15;
+    @apply bg-white/[0.15];
   }
 
   /* Focus styles */

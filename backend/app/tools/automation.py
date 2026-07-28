@@ -235,6 +235,7 @@ class AutomationEngine:
         from backend.app.models.schemas import ToolCall, ToolName
 
         tool_call = ToolCall(
+            id=uuid.uuid4().hex,
             name=ToolName(step.tool_name) if step.tool_name in [e.value for e in ToolName] else ToolName.WEB_SEARCH,
             arguments={**step.params, "action": step.action},
         )

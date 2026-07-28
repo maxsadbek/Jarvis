@@ -7,6 +7,15 @@ The core voice processing pipeline that orchestrates:
 4. AI Response -> Text-to-Speech
 5. Audio output -> WebSocket client
 
+Integrated with VoiceManager for lifecycle sound events:
+- Wake word detected  -> listening.wav
+- AI processing       -> thinking.wav
+- Command execution   -> executing.wav
+- Success             -> completed.wav
+- Error               -> error.wav
+- Connect/Reconnect   -> connected.wav
+- Disconnect          -> disconnected.wav
+
 Uses an event-driven architecture for real-time processing.
 """
 
@@ -41,7 +50,10 @@ from backend.app.text_to_speech import (
     PiperTTS,
     TTSEngine,
 )
+from backend.app.config import settings
 from backend.app.models.schemas import ConnectionState
+from backend.app.voice.wake_word_engine import WakeWordEngine, WakeWordConfig
+from backend.app.voice.voice_manager import PlaybackPriority
 
 
 class PipelineEvent(str, Enum):
@@ -97,6 +109,12 @@ class VoicePipeline:
         self._streamer: Optional[AudioStreamer] = None
         self._session_manager = SessionManager()
 
+        # Wake word detection (continuous listening)
+        self._wake_word: Optional[WakeWordEngine] = None
+
+        # Voice Manager for lifecycle sounds
+        self._voice_manager: Optional[Any] = None
+
         # Pipeline state
         self._active_session: Optional[VoiceSession] = None
         self._is_running = False
@@ -150,6 +168,21 @@ class VoicePipeline:
             else:
                 logger.info("  VAD not available (speech detection disabled)")
 
+            # Initialize wake word detection (if enabled)
+            if settings.WAKE_WORD_ENABLED:
+                ww_config = WakeWordConfig(
+                    wake_words=["jarvis", "hey jarvis", "computer"],
+                    sensitivity=settings.WAKE_WORD_SENSITIVITY,
+                    sample_rate=self._config.voice.input_sample_rate,
+                )
+                self._wake_word = WakeWordEngine(ww_config)
+                ww_ok = await self._wake_word.initialize()
+                if ww_ok:
+                    await self._wake_word.start()
+                    logger.info(f"  Wake word: {', '.join(ww_config.wake_words)}")
+                else:
+                    logger.warning("  Wake word not available")
+
             # Initialize audio streamer
             self._streamer = AudioStreamer(
                 chunk_size_ms=self._config.voice.tts_chunk_size_ms,
@@ -165,6 +198,119 @@ class VoicePipeline:
     @property
     def is_ready(self) -> bool:
         return self._stt is not None and self._stt.is_ready
+
+    @property
+    def wake_word_engine(self) -> Optional[WakeWordEngine]:
+        """Get the wake word engine (if enabled)."""
+        return self._wake_word
+
+    @property
+    def wake_word_enabled(self) -> bool:
+        """Check if wake word detection is active."""
+        return self._wake_word is not None and self._wake_word.is_listening
+
+    # --- Voice Manager Integration ---
+
+    def set_voice_manager(self, voice_manager: Any) -> None:
+        """Attach the VoiceManager for lifecycle sound effects.
+
+        The VoiceManager plays prerecorded clips for:
+        - listening.wav (wake word detected)
+        - thinking.wav (AI processing)
+        - processing.wav (command execution)
+        - completed.wav (success)
+        - error.wav (failure)
+        - connected.wav (reconnected)
+        - disconnected.wav (disconnected)
+
+        Args:
+            voice_manager: Initialized VoiceManager instance.
+        """
+        self._voice_manager = voice_manager
+
+        # Wire event handlers to VoiceManager
+        self.on(PipelineEvent.LISTENING_STARTED, self._on_listening_started)
+        self.on(PipelineEvent.AI_PROCESSING_STARTED, self._on_ai_processing)
+        self.on(PipelineEvent.TRANSCRIPTION_COMPLETE, self._on_transcription_complete)
+        self.on(PipelineEvent.TURN_COMPLETE, self._on_turn_complete)
+        self.on(PipelineEvent.ERROR, self._on_error)
+        self.on(PipelineEvent.STATE_CHANGED, self._on_state_changed)
+
+        logger.debug("VoiceManager wired to pipeline events")
+
+    async def _on_listening_started(self, data: Any) -> None:
+        """Play listening sound when wake word is detected."""
+        if self._voice_manager:
+            await self._voice_manager.play_event(
+                "listening",
+                priority=PlaybackPriority.MEDIUM,
+                allow_interrupt=True,
+            )
+
+    async def _on_ai_processing(self, data: Any) -> None:
+        """Play thinking sound while AI generates response."""
+        if self._voice_manager:
+            await self._voice_manager.play_event(
+                "thinking",
+                priority=PlaybackPriority.LOW,
+                allow_interrupt=False,
+            )
+
+    async def _on_transcription_complete(self, data: Any) -> None:
+        """Play executing sound before command execution.
+
+        This triggers before the AI processes the transcribed text
+        to indicate that execution is starting.
+        """
+        if self._voice_manager and data:
+            await self._voice_manager.play_event(
+                "executing",
+                priority=PlaybackPriority.LOW,
+                allow_interrupt=False,
+            )
+
+    async def _on_turn_complete(self, data: Any) -> None:
+        """Play completed sound after successful turn."""
+        if self._voice_manager:
+            await self._voice_manager.play_event(
+                "completed",
+                priority=PlaybackPriority.LOW,
+                allow_interrupt=False,
+            )
+
+    async def _on_error(self, data: Any) -> None:
+        """Play error sound on pipeline error."""
+        if self._voice_manager:
+            await self._voice_manager.play_event(
+                "error",
+                priority=PlaybackPriority.HIGHEST,
+                allow_interrupt=True,
+            )
+
+    async def _on_state_changed(self, data: Any) -> None:
+        """Handle pipeline state changes."""
+        if not self._voice_manager:
+            return
+        if data == "connected":
+            await self._voice_manager.play_event("connected", priority=PlaybackPriority.MEDIUM)
+        elif data == "disconnected":
+            await self._voice_manager.play_event("disconnected", priority=PlaybackPriority.MEDIUM)
+
+    def process_wake_word_chunk(self, audio_chunk: bytes) -> Optional[str]:
+        """Process audio for wake word detection.
+
+        This is called for every audio chunk during continuous listening.
+        When a wake word is detected, it should trigger a voice session.
+
+        Args:
+            audio_chunk: Raw PCM audio bytes.
+
+        Returns:
+            Detected wake word if matched, None otherwise.
+        """
+        if self._wake_word:
+            return self._wake_word.process_audio(audio_chunk)
+        return None
 
     # --- Event System ---
 
