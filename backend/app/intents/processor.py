@@ -50,6 +50,7 @@ class CommandIntent(str, Enum):
     RECALL_MEMORY = "recall_memory"
     CODING_MODE = "coding_mode"
     RUN_COMMAND = "run_command"
+    VISION_CONTROL = "vision_control"  # Toggle hand/gesture control
     CHAT = "chat"  # General conversation
     UNKNOWN = "unknown"
 
@@ -226,9 +227,27 @@ class IntentPatterns:
         (r"(musiqa|мусица|qo['\u02bc]?shiq|кўшик|song|music|песню|трек)\s+(qo['\u02bc]?y|кўй|play|включи)", CommandIntent.PLAY_MEDIA, "media_control", "play",
          lambda m: {}),
 
+        # ─── Vision / Hand Control (Uzbek) ───
+        # "qo'l bilan boshqarishni yoq", "qo'l boshqaruvini o'chir"
+        (r"qo['\u02bc]?l\s+(bilan\s+)?boshqar\w*\s+(ni|ни)?\s*(yoq|on|o['\u02bc]?chir|off)\b",
+         CommandIntent.VISION_CONTROL, "vision", "toggle",
+         lambda m: {"state": "on" if m.group(3) in ("yoq", "on") else "off"}),
+
         # ====================================================================
         # RUSSIAN / ENGLISH PATTERNS (existing, with enhancements)
         # ====================================================================
+
+        # ─── Vision / Hand Control (English) ───
+        # "hand control on", "gesture tracking off", "enable hand control"
+        (r"(hand|gesture)\s+(control|tracking|management)\s+(on|off|enable|disable)\b",
+         CommandIntent.VISION_CONTROL, "vision", "toggle",
+         lambda m: {"state": "on" if m.group(3) in ("on", "enable") else "off"}),
+
+        # ─── Vision / Hand Control (Russian) ───
+        # "управление жестами включи", "управление рукой выключи"
+        (r"(управление|управлени)\s+(жестами|рукой|руками)\s+(включи|включить|выключи|выключить|вкл|выкл)\b",
+         CommandIntent.VISION_CONTROL, "vision", "toggle",
+         lambda m: {"state": "on" if m.group(3).startswith("включ") or m.group(3) == "вкл" else "off"}),
 
         # ─── Website / URL open (MUST come BEFORE generic 'open app') ───
         (r"(открой|open|go to)\s+(youtube)\b", CommandIntent.OPEN_WEBSITE, "app_control", "open_url",
@@ -491,6 +510,13 @@ class IntentProcessor:
         if any(w in text_lower for w in ["скрин", "screenshot", "ekran", "rasm", "snapshot"]):
             return IntentResult(CommandIntent.TAKE_SCREENSHOT, 0.6, "system_ctl", "screenshot", {}, text)
 
+        # ─── Vision / hand control keywords (multi-language) ───
+        # "qo'l bilan boshqarishni yoq", "управление жестами включи", "hand control on"
+        if any(w in text_lower for w in ["qo'l", "qo‘l", "жест", "gesture", "рука", "рукой", "руками"]):
+            if any(w in text_lower for w in ["boshqar", "control", "управл"]):
+                state = "on" if any(w in text_lower for w in ["yoq", "on", "enable", "включ", "вкл"]) else "off"
+                return IntentResult(CommandIntent.VISION_CONTROL, 0.6, "vision", "toggle", {"state": state}, text)
+
         return None
 
     async def _llm_classify(self, text: str) -> Optional[IntentResult]:
@@ -506,7 +532,8 @@ class IntentProcessor:
                 "determine what action they want to perform. Respond with ONLY a JSON object.\n\n"
                 "Possible intents: open_app, close_app, search_web, open_website, search_files, "
                 "system_shutdown, system_restart, system_sleep, volume_up, volume_down, "
-                "play_music, pause_music, save_memory, recall_memory, chat, coding_mode\n\n"
+                "play_music, pause_music, save_memory, recall_memory, chat, coding_mode, "
+                "vision_control\n\n"
                 f"User request: {text}\n\n"
                 "JSON response format: {\"intent\": \"...\", \"tool\": \"...\", \"action\": \"...\", \"params\": {...}}"
             )

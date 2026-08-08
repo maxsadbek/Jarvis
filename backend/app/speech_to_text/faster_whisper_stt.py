@@ -8,7 +8,7 @@ Supports automatic language detection and VAD filtering.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 import numpy as np
 from loguru import logger
@@ -93,45 +93,66 @@ class FasterWhisperSTT(STTEngine):
                 / 32768.0
             )
 
-            # Run transcription
-            segments, info = self._model.transcribe(
-                audio_array,
-                beam_size=5,
-                language=language,  # None = auto-detect
-                vad_filter=True,
-                vad_parameters=dict(
-                    threshold=0.5,
-                    min_speech_duration_ms=250,
-                    max_speech_duration_s=30,
-                    min_silence_duration_ms=500,
-                ),
-            )
+            def _run(lang: Optional[str]) -> tuple[list[str], list[dict], Any]:
+                """One transcription pass; returns (texts, segments, info)."""
+                segments, info = self._model.transcribe(
+                    audio_array,
+                    beam_size=5,
+                    language=lang,  # None = auto-detect
+                    vad_filter=True,
+                    vad_parameters=dict(
+                        threshold=0.5,
+                        min_speech_duration_ms=250,
+                        max_speech_duration_s=30,
+                        min_silence_duration_ms=500,
+                    ),
+                )
+                text_parts: list[str] = []
+                segment_list: list[dict] = []
+                for segment in segments:
+                    text_parts.append(segment.text.strip())
+                    segment_list.append({
+                        "text": segment.text.strip(),
+                        "start": segment.start,
+                        "end": segment.end,
+                        "confidence": getattr(segment, "confidence", 0.0),
+                    })
+                return text_parts, segment_list, info
 
-            # Collect segments
-            segment_list = []
-            text_parts = []
-            for segment in segments:
-                text_parts.append(segment.text.strip())
-                segment_list.append({
-                    "text": segment.text.strip(),
-                    "start": segment.start,
-                    "end": segment.end,
-                    "confidence": getattr(segment, "confidence", 0.0),
-                })
+            text_parts, segment_list, info = _run(language)
+
+            detected_lang = info.language if hasattr(info, "language") else "en"
+            language_prob = getattr(info, "language_probability", 1.0)
+
+            # Auto-detection is unreliable on short / noisy clips and often
+            # mislabels Uzbek speech as Russian - fall back to the configured
+            # default language when the detection confidence is too low.
+            if (
+                language is None
+                and language_prob < settings.WHISPER_AUTO_DETECT_MIN_PROBABILITY
+            ):
+                fallback_lang = settings.WHISPER_FALLBACK_LANGUAGE
+                logger.info(
+                    f"Language auto-detect gave '{detected_lang}' with low "
+                    f"confidence ({language_prob:.2f}) - retrying with "
+                    f"'{fallback_lang}'"
+                )
+                text_parts, segment_list, info = _run(fallback_lang)
+                detected_lang = fallback_lang
 
             transcript = " ".join(text_parts)
-            duration = info.duration if hasattr(info, "duration") else 0.0
+            duration = getattr(info, "duration", 0.0)
 
             logger.debug(
                 f"Transcribed {len(transcript)} chars "
-                f"(lang={info.language if hasattr(info, 'language') else 'auto'}, "
-                f"prob={info.language_probability if hasattr(info, 'language_probability') else 0:.2f})"
+                f"(lang={detected_lang}, "
+                f"prob={getattr(info, 'language_probability', 0):.2f})"
             )
 
             return STTResult(
                 text=transcript,
                 confidence=getattr(info, "average_logprob", 0.0),
-                language=info.language if hasattr(info, "language") else "en",
+                language=detected_lang,
                 duration_seconds=duration,
                 segments=segment_list,
             )
@@ -150,29 +171,51 @@ class FasterWhisperSTT(STTEngine):
             return STTResult(text="", error="STT engine not initialized")
 
         try:
-            segments, info = self._model.transcribe(
-                str(file_path),
-                beam_size=5,
-                language=language,
-                vad_filter=True,
-            )
+            def _run(lang: Optional[str]) -> tuple[list[str], list[dict], Any]:
+                """One transcription pass; returns (texts, segments, info)."""
+                segments, info = self._model.transcribe(
+                    str(file_path),
+                    beam_size=5,
+                    language=lang,
+                    vad_filter=True,
+                )
+                text_parts: list[str] = []
+                segment_list: list[dict] = []
+                for segment in segments:
+                    text_parts.append(segment.text.strip())
+                    segment_list.append({
+                        "text": segment.text.strip(),
+                        "start": segment.start,
+                        "end": segment.end,
+                    })
+                return text_parts, segment_list, info
 
-            text_parts = []
-            segment_list = []
-            for segment in segments:
-                text_parts.append(segment.text.strip())
-                segment_list.append({
-                    "text": segment.text.strip(),
-                    "start": segment.start,
-                    "end": segment.end,
-                })
+            text_parts, segment_list, info = _run(language)
+
+            detected_lang = info.language if hasattr(info, "language") else "en"
+            language_prob = getattr(info, "language_probability", 1.0)
+
+            # Same low-confidence fallback as transcribe(): unreliable
+            # auto-detection defaults to the configured language (uz).
+            if (
+                language is None
+                and language_prob < settings.WHISPER_AUTO_DETECT_MIN_PROBABILITY
+            ):
+                fallback_lang = settings.WHISPER_FALLBACK_LANGUAGE
+                logger.info(
+                    f"File language auto-detect gave '{detected_lang}' with low "
+                    f"confidence ({language_prob:.2f}) - retrying with "
+                    f"'{fallback_lang}'"
+                )
+                text_parts, segment_list, info = _run(fallback_lang)
+                detected_lang = fallback_lang
 
             transcript = " ".join(text_parts)
             logger.info(f"File transcribed ({len(transcript)} chars)")
 
             return STTResult(
                 text=transcript,
-                language=info.language if hasattr(info, "language") else "en",
+                language=detected_lang,
                 duration_seconds=getattr(info, "duration", 0.0),
                 segments=segment_list,
             )

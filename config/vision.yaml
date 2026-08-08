@@ -1,0 +1,32 @@
+# JARVIS - Vision (hand control) settings
+# Loaded by config/vision.py and used by vision/vision_control.py.
+# Missing keys fall back to defaults - only override what you need.
+
+# Whether hand control starts automatically when the backend starts.
+enabled_on_startup: false
+
+# --- Camera / hand tracking ---
+camera_index: 0           # webcam device index
+frame_width: 640          # capture resolution (width)
+frame_height: 480         # capture resolution (height)
+max_num_hands: 1          # track a single hand
+
+# --- Gesture recognition ---
+pinch_threshold: 0.045    # thumb-index distance for PINCH (normalized 0..1)
+gesture_history_size: 5   # frames used for gesture smoothing (majority vote)
+gesture_confidence: 0.6   # min share of the history window a gesture must hold
+                          # to be acted on (0.5..1.0; higher = more reliable)
+
+# --- Screen control ---
+# active_zone: central % of the frame mapped to the whole screen, OR four
+# margins [left, right, top, bottom] for an asymmetric zone - a smaller
+# margin makes that screen edge easier to reach. Example:
+#   active_zone: [0.10, 0.10, 0.15, 0.10]
+active_zone: 0.7
+cursor_filter: "kalman"   # kalman | exponential | none
+kalman_q: 4.0             # kalman process noise (higher = more responsive)
+kalman_r: 60.0            # kalman measurement noise (higher = smoother)
+smooth_factor: 0.4        # cursor smoothing for cursor_filter: exponential (0..1)
+pinch_button: "left"      # mouse button pressed by PINCH ("left"/"right"/"middle")
+pinch_debounce_frames: 3  # PINCH must persist N frames before a click/drag fires
+window_drag_enabled: true # FIST window dragging (Windows)

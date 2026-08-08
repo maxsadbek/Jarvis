@@ -9,6 +9,7 @@ Orchestrates all AI operations:
 
 from __future__ import annotations
 
+import asyncio
 import time
 import uuid
 from typing import Any, AsyncGenerator, Optional
@@ -46,6 +47,7 @@ class AIEngine:
         self._automation: Optional[AutomationEngine] = None
         self._intent_processor: Optional[IntentProcessor] = None
         self._plugin_registry: Optional[PluginRegistry] = None
+        self._vision_controller: Optional[Any] = None  # lazy - hand control
         self._start_time: float = time.time()
         self._state: ConnectionState = ConnectionState.DISCONNECTED
 
@@ -105,6 +107,20 @@ class AIEngine:
         # 6. Initialize intent processor (natural language command router)
         self._intent_processor = IntentProcessor(llm_provider=self._llm_provider)
         logger.info("Intent processor ready")
+
+        # 6.5. Vision control (hand gestures) - optional, lazy import so the
+        # backend still runs without OpenCV/MediaPipe installed.
+        try:
+            from config.vision import load_vision_config
+            if load_vision_config().enabled_on_startup:
+                from vision.vision_control import VisionController
+                self._vision_controller = VisionController.from_config()
+                await asyncio.to_thread(self._vision_controller.start)
+                logger.info("Vision control started (enabled_on_startup)")
+        except ImportError:
+            logger.debug("Vision control unavailable (install opencv-python + mediapipe)")
+        except Exception as e:
+            logger.warning(f"Vision control failed to start: {e}")
 
         # 7. Initialize plugin system
         self._plugin_registry = PluginRegistry()
@@ -309,6 +325,10 @@ class AIEngine:
         if intent.tool_name == "memory":
             return await self._handle_memory_intent(intent)
 
+        # ── Handle vision control intents directly ──
+        if intent.tool_name == "vision":
+            return await self._handle_vision_intent(intent)
+
         # ── Handle new control modules directly (not in ToolRegistry) ──
         direct_tools = {
             "app_control": ("backend.app.tools.control.app_control", "AppControlTool"),
@@ -393,9 +413,47 @@ class AIEngine:
 
         return "Processing memory request..."
 
+    async def _handle_vision_intent(self, intent: IntentResult) -> str:
+        """Toggle the hand-controlled vision pipeline on/off.
+
+        The VisionController is created lazily from ``config/vision.yaml`` on
+        the first enable, so the backend works normally until hand control is
+        actually requested.
+        """
+        state = intent.params.get("state", "on")
+
+        if self._vision_controller is None:
+            try:
+                from vision.vision_control import VisionController
+                self._vision_controller = VisionController.from_config()
+            except Exception as e:
+                logger.warning("Vision control unavailable: %s", e)
+                return "Qo'l bilan boshqarish mavjud emas (opencv-python va mediapipe o'rnatilganini tekshiring)."
+
+        # start()/stop() open the camera and join the vision thread - run them
+        # off the event loop so a busy camera never blocks the backend.
+        if state == "on":
+            try:
+                started = await asyncio.to_thread(self._vision_controller.start)
+            except Exception as e:
+                logger.warning("Vision control failed to start: %s", e)
+                self._vision_controller = None  # allow a clean retry
+                return f"Qo'l bilan boshqarishni yoqib bo'lmadi: {e}"
+            return (
+                "Qo'l bilan boshqarish yoqildi."
+                if started
+                else "Qo'l bilan boshqarish allaqachon yoqilgan."
+            )
+
+        await asyncio.to_thread(self._vision_controller.stop)
+        return "Qo'l bilan boshqarish o'chirildi."
+
     async def shutdown(self) -> None:
         """Gracefully shut down the engine."""
         logger.info("Shutting down JARVIS engine...")
+        if self._vision_controller is not None:
+            await asyncio.to_thread(self._vision_controller.stop)
+            self._vision_controller = None
         if hasattr(self._llm_provider, "close"):
             await self._llm_provider.close()
         mem = self.memory

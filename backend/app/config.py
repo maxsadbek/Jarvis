@@ -65,6 +65,8 @@ class Settings(BaseSettings):
     WHISPER_MODEL_SIZE: str = "base"  # "tiny", "base", "small", "medium", "large-v3"
     WHISPER_DEVICE: str = "auto"  # "cpu", "cuda", "auto"
     WHISPER_COMPUTE_TYPE: str = "auto"  # "float16", "int8", "auto"
+    WHISPER_AUTO_DETECT_MIN_PROBABILITY: float = 0.6  # below this -> fall back
+    WHISPER_FALLBACK_LANGUAGE: str = "uz"  # used when auto-detect is unreliable
     DEEPGRAM_API_KEY: Optional[str] = None
     SAMPLE_RATE: int = 16000
     CHANNELS: int = 1
@@ -72,7 +74,12 @@ class Settings(BaseSettings):
 
     # --- Voice - Text to Speech ---
     TTS_ENGINE: str = "piper"  # "piper" | "elevenlabs" | "openai"
-    PIPER_VOICE_MODEL: str = "en_US-lessac-medium"
+    PIPER_VOICE_MODEL: str = "ru_RU-irina-medium"  # ru reads Cyrillic Uzbek well;
+    # tr_TR is the closest official Piper voice for Latin-script Uzbek
+    PIPER_VOICE_FALLBACK_MODELS: list[str] = [
+        "tr_TR-fettah-medium",
+        "en_US-lessac-medium",  # last resort for existing installs
+    ]
     PIPER_VOICE_PATH: Optional[str] = None  # Path to .onnx voice file
     PIPER_OUTPUT_SAMPLE_RATE: int = 22050
     ELEVENLABS_API_KEY: Optional[str] = None
@@ -98,7 +105,7 @@ class Settings(BaseSettings):
     VOICE_DEFAULT_FADE_OUT_MS: int = 0  # Default fade-out ms for system sounds
     VOICE_STARTUP_GREETING_ENABLED: bool = True  # Play greeting on startup
     VOICE_STARTUP_USER_NAME: str = "Максад"  # User name for startup greeting
-    VOICE_STARTUP_LANGUAGE: str = "ru"  # Greeting language (ru, en, uz)
+    VOICE_STARTUP_LANGUAGE: str = "uz"  # Greeting language (ru, en, uz)
 
     # --- Memory ---
     MEMORY_ENABLED: bool = True

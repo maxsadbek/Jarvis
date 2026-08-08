@@ -31,21 +31,32 @@ class TextToSpeech:
             import piper
             from piper import PiperVoice
 
-            # Look for voice model
+            # Look for voice model (configured voice, then fallbacks)
             voice_name = settings.PIPER_VOICE_MODEL
             voice_path = settings.PIPER_VOICE_PATH
 
             if voice_path:
                 model_path = Path(voice_path)
             else:
-                # Search in data/models directory
+                # Search in data/models directory; try fallback voices too so
+                # an Uzbek-friendly voice (ru_RU / tr_TR) is picked up when
+                # the primary model file is missing.
                 models_dir = settings.get_model_path()
-                model_path = models_dir / f"{voice_name}.onnx"
+                model_path = None
+                candidates = [voice_name, *settings.PIPER_VOICE_FALLBACK_MODELS]
+                for candidate in candidates:
+                    candidate_path = models_dir / f"{candidate}.onnx"
+                    if candidate_path.exists():
+                        model_path = candidate_path
+                        voice_name = candidate
+                        break
 
-                if not model_path.exists():
+                if model_path is None:
                     logger.warning(
-                        f"Piper voice model not found at {model_path}. "
-                        f"Please download from https://github.com/rhasspy/piper/releases"
+                        f"Piper voice model not found for any of: "
+                        f"{', '.join(candidates)}. "
+                        f"Please download from "
+                        f"https://github.com/rhasspy/piper/releases"
                     )
                     return False
 

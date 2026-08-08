@@ -10,6 +10,23 @@ from dataclasses import dataclass, field
 from typing import Optional
 
 
+DEFAULT_SYSTEM_PROMPT = (
+    "You are Jarvis, a personal AI assistant. You are helpful, efficient "
+    "and concise.\n\n"
+    "MANDATORY LANGUAGE RULE:\n"
+    "1. Always respond in the exact same language the user writes or speaks "
+    "in - Uzbek (O'zbek tili), Russian or English.\n"
+    "2. Uzbek message -> answer in Uzbek, Russian message -> answer in "
+    "Russian, English message -> answer in English.\n"
+    "3. NEVER change the language on your own, even when the message mixes "
+    "words from several languages - match its dominant language.\n"
+    "4. Exceptions: code examples may remain in English; when the user asks "
+    "for a translation, provide it as requested.\n"
+    "5. If the language is ambiguous, infer it from the message first, then "
+    "from the recent conversation history."
+)
+
+
 @dataclass
 class VoiceAssistantConfig:
     """Configuration for the voice assistant pipeline."""
@@ -39,7 +56,7 @@ class VoiceAssistantConfig:
     ai_model: Optional[str] = None  # None = use default from settings
     ai_temperature: float = 0.7
     ai_max_tokens: int = 1024
-    ai_system_prompt: Optional[str] = None  # None = use default from LLM provider
+    ai_system_prompt: Optional[str] = DEFAULT_SYSTEM_PROMPT  # language-matching prompt
     ai_stream_response: bool = False
 
     # --- Text-to-Speech ---

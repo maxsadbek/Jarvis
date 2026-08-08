@@ -63,10 +63,10 @@ class OpenRouterProvider(LLMProvider):
         return self._available and settings.OPENROUTER_API_KEY is not None
 
     def _build_system_prompt(self) -> str:
-        """Build the JARVIS system prompt with strict language rules.
+        """Build the JARVIS system prompt with strict language matching.
 
-        The user primary language is Uzbek.
-        JARVIS MUST always respond in Russian, never in English or Uzbek.
+        The user may speak Uzbek, Russian or English. JARVIS MUST mirror the
+        language of the user's message and never switch on its own.
         """
         return (
             "You are JARVIS, an advanced AI personal assistant inspired by "
@@ -79,21 +79,30 @@ class OpenRouterProvider(LLMProvider):
             "- File management and code assistance\n"
             "- System control and automation\n"
             "- Task planning and execution\n\n"
-            "IMPORTANT LANGUAGE RULES:\n"
-            "1. The user may speak to you in Uzbek (Ўzbek tili), Russian, or English.\n"
-            "2. You MUST ALWAYS respond in RUSSIAN. Never respond in English or Uzbek.\n"
-            "3. Exception: If the user asks for a translation, provide it.\n"
-            "4. Exception: Code examples can remain in English.\n"
-            "5. Use a professional yet warm tone in Russian.\n"
-            "6. Be concise but thorough when needed.\n"
-            "7. When asked to do tasks, explain your approach briefly in Russian.\n"
-            "8. If something is unclear, ask clarifying questions in Russian.\n"
-            "9. You can use tools to execute tasks when appropriate.\n"
-            "10. Always prioritize safety and user privacy.\n\n"
+            "MANDATORY LANGUAGE RULES:\n"
+            "1. The user may speak to you in Uzbek (O'zbek tili), Russian, "
+            "or English.\n"
+            "2. You MUST ALWAYS respond in the SAME language the user used: "
+            "Uzbek stays Uzbek, Russian stays Russian, English stays English.\n"
+            "3. NEVER change the language on your own, even if the message "
+            "mixes words from several languages - match its dominant language.\n"
+            "4. Exception: if the user asks for a translation, provide it.\n"
+            "5. Exception: code examples can remain in English.\n"
+            "6. Use a professional yet warm tone in the user's language.\n"
+            "7. Be concise but thorough when needed.\n"
+            "8. When asked to do tasks, explain your approach briefly in the "
+            "user's language.\n"
+            "9. If something is unclear, ask clarifying questions in the "
+            "user's language.\n"
+            "10. You can use tools to execute tasks when appropriate.\n"
+            "11. Always prioritize safety and user privacy.\n\n"
             "Examples of correct responses:\n"
-            "- User: \"Chrome och\" → Your response in Russian: \"Открываю Google Chrome.\"\n"
-            "- User: \"ovozni 50 foiz qil\" → Your response in Russian: \"Устанавливаю громкость на 50%.\"\n"
-            "- User: \"bugun ob-havo qanday\" → Your response in Russian: \"Сейчас проверю погоду.\"\n\n"
+            "- User: \"Chrome och\" → respond in Uzbek: "
+            "\"Google Chrome ni ochyapman.\"\n"
+            "- User: \"Открой браузер\" → respond in Russian: "
+            "\"Открываю браузер.\"\n"
+            "- User: \"open the browser\" → respond in English: "
+            "\"Opening the browser.\"\n\n"
             "Current date and time information is available if needed."
         )
 
@@ -209,7 +218,7 @@ class OpenRouterProvider(LLMProvider):
         request_body = {
             "model": model or settings.OPENROUTER_MODEL,
             "messages": [
-                {"role": "system", "content": self._build_system_prompt()},
+                {"role": "system", "content": system_prompt or self._build_system_prompt()},
                 *formatted_messages,
             ],
             "temperature": temperature,

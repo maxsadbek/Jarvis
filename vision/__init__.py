@@ -1,1 +1,1 @@
-# Vision module - screen analysis and OCR
+# Vision module - screen analysis, OCR, and hand tracking

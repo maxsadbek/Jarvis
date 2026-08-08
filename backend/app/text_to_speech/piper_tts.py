@@ -33,19 +33,29 @@ class PiperTTS(TTSEngine):
             voice_path = settings.PIPER_VOICE_PATH
             models_dir = settings.get_model_path()
 
-            # Resolve voice model path
             if voice_path:
                 model_path = Path(voice_path)
             else:
-                model_path = models_dir / f"{voice_name}.onnx"
+                # Try the configured voice first, then the fallback list, so
+                # an Uzbek-friendly voice (ru_RU / tr_TR) is used when the
+                # primary model file is missing.
+                model_path = None
+                candidates = [voice_name, *settings.PIPER_VOICE_FALLBACK_MODELS]
+                for candidate in candidates:
+                    candidate_path = models_dir / f"{candidate}.onnx"
+                    if candidate_path.exists():
+                        model_path = candidate_path
+                        voice_name = candidate
+                        break
 
-            if not model_path.exists():
-                logger.warning(
-                    f"Piper voice model not found at {model_path}.\n"
-                    f"Download from: https://github.com/rhasspy/piper/releases\n"
-                    f"Place the .onnx and .json files in {models_dir}"
-                )
-                return False
+                if model_path is None:
+                    logger.warning(
+                        f"Piper voice model not found for any of: "
+                        f"{', '.join(candidates)}.\n"
+                        f"Download from: https://github.com/rhasspy/piper/releases\n"
+                        f"Place the .onnx and .json files in {models_dir}"
+                    )
+                    return False
 
             json_path = model_path.with_suffix(".json")
             if not json_path.exists():

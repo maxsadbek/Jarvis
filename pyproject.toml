@@ -50,7 +50,7 @@ dev = [
     "pre-commit>=4.0",
 ]
 gpu = ["torch>=2.4.0"]
-vision = ["opencv-python>=4.9.0", "pytesseract>=0.3.10"]
+vision = ["opencv-python>=4.9.0", "pytesseract>=0.3.10", "mediapipe>=0.10.0"]
 wakeword = ["pvporcupine>=3.0.0"]
 
 [tool.setuptools.packages.find]

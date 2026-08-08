@@ -10,6 +10,7 @@ from __future__ import annotations
 import os
 import shutil
 import subprocess
+import time
 import webbrowser
 from pathlib import Path
 from typing import Any
@@ -65,6 +66,7 @@ class AppControlTool(BaseTool):
     APP_ALIASES: dict[str, list[str]] = {
         # Browsers (multi-language)
         "браузер": ["chrome.exe", "msedge.exe", "firefox.exe"],
+        "brauzer": ["chrome.exe", "msedge.exe", "firefox.exe"],
         "browser": ["chrome.exe", "msedge.exe", "firefox.exe"],
         "chrome": ["chrome.exe"],
         "google": ["chrome.exe"],
@@ -281,20 +283,94 @@ class AppControlTool(BaseTool):
 
     @staticmethod
     def _get_best_browser() -> str:
-        """Get the best available browser: Chrome > Edge > Firefox > default."""
+        """Get the best available browser: Chrome > Edge > Firefox > none."""
         chrome = AppControlTool._find_chrome()
         if chrome:
             return chrome
         edge = AppControlTool._find_edge()
         if edge:
             return edge
-        # Fallback to system default browser via webbrowser module
-        return ""
+        return AppControlTool._find_firefox()
+
+    # ─── Process launch verification ───
+
+    @staticmethod
+    def _process_running(exe_names: list[str]) -> bool:
+        """Check whether any of the given executables is running.
+
+        Uses psutil; falls back to the Windows ``tasklist`` command when
+        psutil is not installed. Note: an already-running process makes this
+        return ``True`` even if a new instance did not start - acceptable for
+        browsers (the window is reused), a known limitation elsewhere.
+        """
+        targets = {name.lower() for name in exe_names}
+        try:
+            import psutil
+            for proc in psutil.process_iter(["name"]):
+                try:
+                    if (proc.info["name"] or "").lower() in targets:
+                        return True
+                except (psutil.NoSuchProcess, psutil.AccessDenied):
+                    continue
+        except ImportError:
+            for exe in targets:
+                try:
+                    result = subprocess.run(
+                        ["tasklist", "/FI", f"IMAGENAME eq {exe}", "/NH"],
+                        capture_output=True, text=True, timeout=5,
+                    )
+                    if exe in result.stdout.lower():
+                        return True
+                except Exception:
+                    continue
+        return False
+
+    @staticmethod
+    def _wait_for_process(exe_names: list[str], timeout: float = 3.0) -> bool:
+        """Wait up to ``timeout`` seconds for any listed executable to appear.
+
+        Checks at least once, so ``timeout=0`` still performs a single poll.
+        """
+        deadline = time.monotonic() + max(timeout, 0.0)
+        while True:
+            if AppControlTool._process_running(exe_names):
+                return True
+            if time.monotonic() >= deadline:
+                return False
+            time.sleep(0.2)
+
+    def _launch_and_verify(
+        self,
+        command: str | list[str],
+        exe_names: list[str],
+        *,
+        shell: bool,
+        timeout: float = 5.0,
+    ) -> tuple[bool, str]:
+        """Launch a command and verify the app really started.
+
+        ``start`` commands can fail silently (e.g. the app is not installed),
+        so success is only reported once a matching process appears in the
+        process list.
+
+        :return: ``(True, "")`` when a matching process appeared within
+            ``timeout`` seconds, otherwise ``(False, error_message)``.
+        """
+        try:
+            subprocess.Popen(command, shell=shell)
+        except Exception as e:
+            return False, f"launch failed: {e}"
+        if self._wait_for_process(exe_names, timeout):
+            return True, ""
+        return (
+            False,
+            f"no matching process ({', '.join(exe_names)}) appeared "
+            f"within {timeout:.0f}s",
+        )
 
     # ─── Execution ───
 
     async def execute(self, action: str, target: str = "", url: str = "", **kwargs: Any) -> dict[str, Any]:
-        import time
         start = time.time()
         logger.info(f"AppControl: executing action='{action}' target='{target}' url='{url}'")
 
@@ -362,9 +438,16 @@ class AppControlTool(BaseTool):
                 except Exception as e:
                     return {"success": False, "error": f"Chrome not found and Edge failed: {e}", "result": ""}
             else:
-                # Last resort: try `start chrome` via shell
-                subprocess.Popen("start chrome", shell=True)
-                return {"success": True, "result": "Attempted to open Chrome via start command"}
+                # Last resort: try `start chrome` via shell and verify it
+                # really launched (start can fail silently).
+                ok, err = self._launch_and_verify("start chrome", ["chrome.exe"], shell=True)
+                if ok:
+                    return {"success": True, "result": "Opened Chrome via start command"}
+                return {
+                    "success": False,
+                    "error": f"Chrome is not installed and could not be launched: {err}",
+                    "result": "",
+                }
 
         # ── Edge detection ──
         if target_lower in ("edge", "microsoft edge"):
@@ -375,8 +458,14 @@ class AppControlTool(BaseTool):
                     return {"success": True, "result": "Opened Edge"}
                 except Exception as e:
                     return {"success": False, "error": str(e), "result": ""}
-            subprocess.Popen("start msedge", shell=True)
-            return {"success": True, "result": "Attempted to open Edge"}
+            ok, err = self._launch_and_verify("start msedge", ["msedge.exe"], shell=True)
+            if ok:
+                return {"success": True, "result": "Opened Edge via start command"}
+            return {
+                "success": False,
+                "error": f"Edge could not be launched: {err}",
+                "result": "",
+            }
 
         # ── Firefox detection ──
         if target_lower in ("firefox", "mozilla firefox"):
@@ -387,16 +476,45 @@ class AppControlTool(BaseTool):
                     return {"success": True, "result": "Opened Firefox"}
                 except Exception as e:
                     return {"success": False, "error": str(e), "result": ""}
-            subprocess.Popen("start firefox", shell=True)
-            return {"success": True, "result": "Attempted to open Firefox"}
+            ok, err = self._launch_and_verify("start firefox", ["firefox.exe"], shell=True)
+            if ok:
+                return {"success": True, "result": "Opened Firefox via start command"}
+            return {
+                "success": False,
+                "error": f"Firefox could not be launched: {err}",
+                "result": "",
+            }
+
+        # ── Generic browser (best available: Chrome > Edge > Firefox) ──
+        if target_lower in ("browser", "браузер", "brauzer"):
+            browser_path = self._get_best_browser()
+            if not browser_path:
+                return {
+                    "success": False,
+                    "error": "No browser (Chrome, Edge or Firefox) found on this system",
+                    "result": "",
+                }
+            try:
+                subprocess.Popen([browser_path], shell=False)
+                return {
+                    "success": True,
+                    "result": f"Opened browser ({Path(browser_path).name})",
+                }
+            except Exception as e:
+                return {"success": False, "error": f"Failed to launch browser: {e}", "result": ""}
 
         # ── Settings (Windows Settings app via ms-settings: URI) ──
-        if target_lower in ("settings", "настройки"):
-            try:
-                subprocess.Popen("start ms-settings:", shell=True)
+        if target_lower in ("settings", "настройки", "sozlamalar"):
+            ok, err = self._launch_and_verify(
+                "start ms-settings:", ["SystemSettings.exe"], shell=True
+            )
+            if ok:
                 return {"success": True, "result": "Opened Settings"}
-            except Exception as e:
-                return {"success": False, "error": str(e), "result": ""}
+            return {
+                "success": False,
+                "error": f"Settings could not be opened: {err}",
+                "result": "",
+            }
 
         # ── Control Panel ──
         if target_lower in ("control panel", "панель управления"):
@@ -422,8 +540,14 @@ class AppControlTool(BaseTool):
                         return {"success": True, "result": "Opened VS Code"}
                     except Exception:
                         continue
-            subprocess.Popen("start code", shell=True)
-            return {"success": True, "result": "Attempted to open VS Code"}
+            ok, err = self._launch_and_verify("start code", ["Code.exe"], shell=True)
+            if ok:
+                return {"success": True, "result": "Opened VS Code via start command"}
+            return {
+                "success": False,
+                "error": f"VS Code could not be launched: {err}",
+                "result": "",
+            }
 
         # ── Discord ──
         if target_lower == "discord":
@@ -448,8 +572,14 @@ class AppControlTool(BaseTool):
                         return {"success": True, "result": "Opened Discord"}
                     except Exception:
                         continue
-            subprocess.Popen("start Discord", shell=True)
-            return {"success": True, "result": "Attempted to open Discord"}
+            ok, err = self._launch_and_verify("start Discord", ["Discord.exe"], shell=True)
+            if ok:
+                return {"success": True, "result": "Opened Discord via start command"}
+            return {
+                "success": False,
+                "error": f"Discord could not be launched: {err}",
+                "result": "",
+            }
 
         # ── Spotify ──
         if target_lower in ("spotify", "музыка"):
@@ -465,8 +595,14 @@ class AppControlTool(BaseTool):
                         return {"success": True, "result": "Opened Spotify"}
                     except Exception:
                         continue
-            subprocess.Popen("start spotify", shell=True)
-            return {"success": True, "result": "Attempted to open Spotify"}
+            ok, err = self._launch_and_verify("start spotify", ["Spotify.exe"], shell=True)
+            if ok:
+                return {"success": True, "result": "Opened Spotify via start command"}
+            return {
+                "success": False,
+                "error": f"Spotify could not be launched: {err}",
+                "result": "",
+            }
 
         # ── Telegram ──
         if target_lower == "telegram":
@@ -481,8 +617,14 @@ class AppControlTool(BaseTool):
                         return {"success": True, "result": "Opened Telegram"}
                     except Exception:
                         continue
-            subprocess.Popen("start Telegram", shell=True)
-            return {"success": True, "result": "Attempted to open Telegram"}
+            ok, err = self._launch_and_verify("start Telegram", ["Telegram.exe"], shell=True)
+            if ok:
+                return {"success": True, "result": "Opened Telegram via start command"}
+            return {
+                "success": False,
+                "error": f"Telegram could not be launched: {err}",
+                "result": "",
+            }
 
         # ── Windows Terminal ──
         if target_lower in ("terminal", "терминал"):
@@ -493,9 +635,19 @@ class AppControlTool(BaseTool):
                     return {"success": True, "result": "Opened Windows Terminal"}
                 except Exception:
                     pass
-            # Fallback to CMD
-            subprocess.Popen(["cmd.exe", "/c", "start", "Windows Terminal"], shell=False)
-            return {"success": True, "result": "Attempted to open Windows Terminal"}
+            # Fallback to CMD and verify the terminal actually appeared
+            ok, err = self._launch_and_verify(
+                ["cmd.exe", "/c", "start", "Windows Terminal"],
+                ["WindowsTerminal.exe"],
+                shell=False,
+            )
+            if ok:
+                return {"success": True, "result": "Opened Windows Terminal"}
+            return {
+                "success": False,
+                "error": f"Windows Terminal could not be launched: {err}",
+                "result": "",
+            }
 
         # ── Generic: Check aliases ──
         exe_names = self.APP_ALIASES.get(target_lower, [f"{target_lower}.exe"])
@@ -521,11 +673,22 @@ class AppControlTool(BaseTool):
                 except Exception:
                     continue
 
-        # ── Fallback: try via 'start' command ──
+        # ── Fallback: try via 'start' command and verify it really launched ──
         try:
-            subprocess.Popen(f"start {target}", shell=True)
-            logger.info(f"Attempted to open via start: {target}")
-            return {"success": True, "result": f"Attempted to open {target} via start"}
+            exe_names = self.APP_ALIASES.get(target_lower, [f"{target_lower}.exe"])
+            ok, err = self._launch_and_verify(f"start {target}", exe_names, shell=True)
+            if ok:
+                logger.info(f"Opened via start: {target}")
+                return {"success": True, "result": f"Opened {target}"}
+            logger.warning(f"Failed to open via start: {target} ({err})")
+            return {
+                "success": False,
+                "error": (
+                    f"Could not open '{target}': {err}. Check that the "
+                    f"application is installed and the name is correct."
+                ),
+                "result": "",
+            }
         except Exception as e:
             return {"success": False, "error": f"Could not open {target}: {e}", "result": ""}
 
@@ -552,10 +715,16 @@ class AppControlTool(BaseTool):
             except Exception as e:
                 logger.warning(f"Browser launch failed: {e}")
 
-        # Last resort: use start command
+        # Last resort: use start command and verify a browser really opened
         try:
-            subprocess.Popen(f'start "" "{url}"', shell=True)
-            return {"success": True, "result": f"Attempted to open {url}"}
+            ok, err = self._launch_and_verify(
+                f'start "" "{url}"',
+                ["chrome.exe", "msedge.exe", "firefox.exe", "opera.exe", "brave.exe"],
+                shell=True,
+            )
+            if ok:
+                return {"success": True, "result": f"Opened {url}"}
+            return {"success": False, "error": f"Could not open {url}: {err}", "result": ""}
         except Exception as e:
             return {"success": False, "error": str(e), "result": ""}
 

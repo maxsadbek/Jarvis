@@ -25,6 +25,7 @@ pygetwindow>=0.0.9
 pillow>=10.0.0
 pytesseract>=0.3.10
 opencv-python>=4.9.0
+mediapipe>=0.10.0
 
 # Utilities
 requests>=2.31.0
