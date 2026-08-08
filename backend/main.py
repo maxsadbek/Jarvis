@@ -16,9 +16,16 @@ from __future__ import annotations
 
 import asyncio
 import socket
+import sys
 import uuid
 from pathlib import Path
 from contextlib import asynccontextmanager
+
+# Ensure the project root is importable regardless of how this file is launched
+# (python backend/main.py from project root, python -m backend.main, etc.)
+_PROJECT_ROOT = Path(__file__).resolve().parent.parent
+if str(_PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(_PROJECT_ROOT))
 
 from fastapi import FastAPI, WebSocket, Query, Request, HTTPException
 from loguru import logger
@@ -544,7 +551,7 @@ async def websocket_endpoint(
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(
-        "main:app",
+        "backend.main:app",
         host=settings.HOST,
         port=settings.PORT,
         reload=settings.DEBUG,

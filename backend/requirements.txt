@@ -19,7 +19,7 @@ soundfile>=0.12.1
 numpy>=1.26.0
 scipy>=1.14.0
 pyaudio>=0.2.14
-webrtcvad>=2.0.10
+webrtcvad-wheels>=2.0.9  # prebuilt wheels; webrtcvad requires MSVC build tools on Windows
 
 # Voice - Text to Speech
 piper-tts>=1.2.0
