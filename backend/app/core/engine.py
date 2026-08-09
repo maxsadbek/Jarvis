@@ -53,9 +53,13 @@ class AIEngine:
 
     async def initialize(self) -> None:
         """Initialize all engine components."""
+        _eng_start = time.time()
+        logger.info(f"[TIMING] engine.initialize() boshlandi  t=+0.000s")
         logger.info("Initializing JARVIS AI Engine...")
 
         # 1. Initialize LLM provider
+        _t0 = time.time()
+        logger.info(f"[TIMING] LLM provider init boshlandi...  t=+{_t0 - _eng_start:.3f}s")
         if settings.OPENROUTER_API_KEY:
             logger.info("Connecting to OpenRouter...")
             self._llm_provider = OpenRouterProvider()
@@ -73,8 +77,12 @@ class AIEngine:
 
         if not self._llm_provider or not self._llm_provider.is_available:
             logger.warning("No LLM provider available")
+        _t1 = time.time()
+        logger.info(f"[TIMING] LLM provider init tugadi  t=+{_t1 - _eng_start:.3f}s  (davomiyligi: {_t1 - _t0:.3f}s)")
 
         # 2. Initialize advanced memory system
+        _t0 = time.time()
+        logger.info(f"[TIMING] Memory system init boshlandi...  t=+{_t0 - _eng_start:.3f}s")
         if settings.MEMORY_ENABLED:
             logger.info("Initializing memory system...")
             self._memory = MemoryManager()
@@ -87,29 +95,49 @@ class AIEngine:
                 logger.warning("Memory system initialized with degraded functionality")
         else:
             self._memory_ready = False
+        _t1 = time.time()
+        logger.info(f"[TIMING] Memory system init tugadi  t=+{_t1 - _eng_start:.3f}s  (davomiyligi: {_t1 - _t0:.3f}s)")
 
         # 3. Initialize context manager (uses MemoryManager)
+        _t0 = time.time()
+        logger.info(f"[TIMING] ContextManager init boshlandi...  t=+{_t0 - _eng_start:.3f}s")
         self._context_manager = ContextManager(self._memory)
         logger.info("Context manager ready")
+        _t1 = time.time()
+        logger.info(f"[TIMING] ContextManager init tugadi  t=+{_t1 - _eng_start:.3f}s  (davomiyligi: {_t1 - _t0:.3f}s)")
 
         # 4. Initialize tool registry
         if settings.TOOLS_ENABLED:
+            _t0 = time.time()
+            logger.info(f"[TIMING] ToolRegistry init boshlandi...  t=+{_t0 - _eng_start:.3f}s")
             self._tool_registry = ToolRegistry()
             await self._tool_registry.initialize()
+            _t1 = time.time()
+            logger.info(f"[TIMING] ToolRegistry init tugadi  t=+{_t1 - _eng_start:.3f}s  (davomiyligi: {_t1 - _t0:.3f}s)")
             logger.info(f"Tool registry ready with {len(self._tool_registry.tools)} tools")
 
             # 5. Initialize automation engine if tools are enabled
             if settings.AUTOMATION_ENABLED:
+                _t0 = time.time()
+                logger.info(f"[TIMING] AutomationEngine init boshlandi...  t=+{_t0 - _eng_start:.3f}s")
                 self._automation = AutomationEngine(tool_registry=self._tool_registry)
                 await self._automation.initialize()
+                _t1 = time.time()
+                logger.info(f"[TIMING] AutomationEngine init tugadi  t=+{_t1 - _eng_start:.3f}s  (davomiyligi: {_t1 - _t0:.3f}s)")
                 logger.info("Automation engine ready")
 
         # 6. Initialize intent processor (natural language command router)
+        _t0 = time.time()
+        logger.info(f"[TIMING] IntentProcessor init boshlandi...  t=+{_t0 - _eng_start:.3f}s")
         self._intent_processor = IntentProcessor(llm_provider=self._llm_provider)
         logger.info("Intent processor ready")
+        _t1 = time.time()
+        logger.info(f"[TIMING] IntentProcessor init tugadi  t=+{_t1 - _eng_start:.3f}s  (davomiyligi: {_t1 - _t0:.3f}s)")
 
         # 6.5. Vision control (hand gestures) - optional, lazy import so the
         # backend still runs without OpenCV/MediaPipe installed.
+        _t0 = time.time()
+        logger.info(f"[TIMING] VisionControl init boshlandi...  t=+{_t0 - _eng_start:.3f}s")
         try:
             from config.vision import load_vision_config
             if load_vision_config().enabled_on_startup:
@@ -121,12 +149,20 @@ class AIEngine:
             logger.debug("Vision control unavailable (install opencv-python + mediapipe)")
         except Exception as e:
             logger.warning(f"Vision control failed to start: {e}")
+        _t1 = time.time()
+        logger.info(f"[TIMING] VisionControl init tugadi  t=+{_t1 - _eng_start:.3f}s  (davomiyligi: {_t1 - _t0:.3f}s)")
 
         # 7. Initialize plugin system
+        _t0 = time.time()
+        logger.info(f"[TIMING] PluginRegistry init boshlandi...  t=+{_t0 - _eng_start:.3f}s")
         self._plugin_registry = PluginRegistry()
         plugin_count = await self._plugin_registry.discover_and_load()
+        _t1 = time.time()
+        logger.info(f"[TIMING] PluginRegistry init tugadi  t=+{_t1 - _eng_start:.3f}s  (davomiyligi: {_t1 - _t0:.3f}s)")
         logger.info(f"Plugin registry ready: {plugin_count} plugins")
 
+        _total = time.time() - _eng_start
+        logger.info(f"[TIMING] engine.initialize() TUGADI  umumiy vaqt: {_total:.3f}s")
         logger.info("JARVIS AI Engine initialization complete")
 
     @property

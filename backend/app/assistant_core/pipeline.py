@@ -133,26 +133,38 @@ class VoicePipeline:
 
     async def initialize(self) -> bool:
         """Initialize all pipeline components."""
+        _pipeline_start = time.time()
+        logger.info(f"[TIMING] pipeline.initialize() boshlandi  t=+0.000s")
         logger.info("Initializing voice pipeline...")
 
         try:
             # Initialize STT
+            _t0 = time.time()
+            logger.info(f"[TIMING] STT init boshlandi...  t=+{_t0 - _pipeline_start:.3f}s")
             self._stt = FasterWhisperSTT()
             stt_ok = await self._stt.initialize()
+            _t1 = time.time()
+            logger.info(f"[TIMING] STT init tugadi  t=+{_t1 - _pipeline_start:.3f}s  (davomiyligi: {_t1 - _t0:.3f}s)")
             if stt_ok:
                 logger.info(f"  STT: {self._stt.model_name}")
             else:
                 logger.warning("  STT not available")
 
             # Initialize TTS
+            _t0 = time.time()
+            logger.info(f"[TIMING] TTS init boshlandi...  t=+{_t0 - _pipeline_start:.3f}s")
             self._tts = PiperTTS()
             tts_ok = await self._tts.initialize()
+            _t1 = time.time()
+            logger.info(f"[TIMING] TTS init tugadi  t=+{_t1 - _pipeline_start:.3f}s  (davomiyligi: {_t1 - _t0:.3f}s)")
             if tts_ok:
                 logger.info(f"  TTS: {self._tts.voice_name}")
             else:
                 logger.warning("  TTS not available")
 
             # Initialize VAD
+            _t0 = time.time()
+            logger.info(f"[TIMING] VAD init boshlandi...  t=+{_t0 - _pipeline_start:.3f}s")
             vad_config = VadConfig(
                 mode=self._config.voice.vad_mode,
                 sample_rate=self._config.voice.input_sample_rate,
@@ -163,6 +175,8 @@ class VoicePipeline:
             )
             self._vad = VoiceActivityDetector(vad_config)
             vad_ok = await self._vad.initialize()
+            _t1 = time.time()
+            logger.info(f"[TIMING] VAD init tugadi  t=+{_t1 - _pipeline_start:.3f}s  (davomiyligi: {_t1 - _t0:.3f}s)")
             if vad_ok:
                 logger.info("  VAD ready")
             else:
@@ -170,6 +184,8 @@ class VoicePipeline:
 
             # Initialize wake word detection (if enabled)
             if settings.WAKE_WORD_ENABLED:
+                _t0 = time.time()
+                logger.info(f"[TIMING] WakeWord init boshlandi...  t=+{_t0 - _pipeline_start:.3f}s")
                 ww_config = WakeWordConfig(
                     wake_words=["jarvis", "hey jarvis", "computer"],
                     sensitivity=settings.WAKE_WORD_SENSITIVITY,
@@ -182,16 +198,28 @@ class VoicePipeline:
                     logger.info(f"  Wake word: {', '.join(ww_config.wake_words)}")
                 else:
                     logger.warning("  Wake word not available")
+                _t1 = time.time()
+                logger.info(f"[TIMING] WakeWord init tugadi  t=+{_t1 - _pipeline_start:.3f}s  (davomiyligi: {_t1 - _t0:.3f}s)")
+            else:
+                logger.info("[TIMING] WakeWord o'chirilgan (WAKE_WORD_ENABLED=False), o'tkazib yuborildi")
 
             # Initialize audio streamer
+            _t0 = time.time()
+            logger.info(f"[TIMING] AudioStreamer init boshlandi...  t=+{_t0 - _pipeline_start:.3f}s")
             self._streamer = AudioStreamer(
                 chunk_size_ms=self._config.voice.tts_chunk_size_ms,
             )
+            _t1 = time.time()
+            logger.info(f"[TIMING] AudioStreamer init tugadi  t=+{_t1 - _pipeline_start:.3f}s  (davomiyligi: {_t1 - _t0:.3f}s)")
 
+            _total = time.time() - _pipeline_start
+            logger.info(f"[TIMING] pipeline.initialize() TUGADI  umumiy vaqt: {_total:.3f}s")
             logger.info("Voice pipeline initialized")
             return True
 
         except Exception as e:
+            _elapsed = time.time() - _pipeline_start
+            logger.error(f"[TIMING] pipeline.initialize() XATO  t=+{_elapsed:.3f}s  xato: {e}")
             logger.error(f"Voice pipeline initialization failed: {e}")
             return False
 
