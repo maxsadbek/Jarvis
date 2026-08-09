@@ -1,0 +1,10 @@
+# RVC voice conversion (JARVIS ovozi) — ixtiyoriy
+#
+# ⚠️ BU PAKETLAR ALOHIDA Python 3.10 MUHITIDA O'RNATILADI (QOLLANMA.md ga qarang):
+#     py -3.10 -m venv rvc-venv
+#     rvc-venv\Scripts\activate
+#     pip install -r backend\requirements-rvc.txt
+#
+# Sabab: rvc-python numpy<=1.23.5 ni talab qiladi, u Python 3.11+ bilan mos emas.
+# O'rnatilgach .env'da RVC_ENABLED=true va RVC_PYTHON_PATH ni ko'rsating.
+rvc-python==0.1.5

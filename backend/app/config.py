@@ -87,6 +87,20 @@ class Settings(BaseSettings):
     OPENAI_TTS_VOICE: str = "alloy"
     TTS_SPEED: float = 1.0
 
+    # --- Voice - RVC (Jarvis voice conversion, optional) ---
+    # RVC model Colab'da o'qitiladi (rvc_training/ ga qarang), natijadagi
+    # jarvis.pth va jarvis.index data/models/rvc/jarvis/ papkasiga qo'yiladi.
+    # rvc-python alohida Python 3.10 muhitida ishlaydi (qarang rvc_worker.py).
+    RVC_ENABLED: bool = False
+    RVC_MODEL_DIR: str = "data/models/rvc"  # Model papkalari turgan katalog
+    RVC_MODEL_NAME: str = "jarvis"
+    RVC_PYTHON_PATH: Optional[str] = None  # Python 3.10 venv'dagi python.exe manzili
+    RVC_F0_METHOD: str = "harvest"  # "harvest" (tez) | "rmvpe" | "crepe" | "pm"
+    RVC_INDEX_RATE: float = 0.7
+    RVC_PROTECT: float = 0.33
+    RVC_RMS_MIX_RATE: float = 0.8
+    RVC_F0_UP_KEY: int = 0
+
     # --- Wake Word ---
     WAKE_WORD_ENABLED: bool = True
     WAKE_WORD: str = "jarvis"
