@@ -13,6 +13,8 @@ files:
   - dist/**/*
   - config/**/*
   - public/**/*
+  - index.html
+  - resources/**/*
   - package.json
 
 extraResources:

@@ -6,8 +6,10 @@
   "author": "JARVIS Team",
   "license": "MIT",
   "scripts": {
-    "dev": "concurrently \"tsc --watch\" \"electron .\"",
-    "build": "tsc",
+    "build:renderer": "esbuild src/App.tsx --bundle --outfile=dist/App.js --format=iife --platform=browser --sourcemap",
+    "typecheck": "tsc --noEmit -p tsconfig.renderer.json && tsc --noEmit",
+    "build": "npm run typecheck && npm run build:renderer && tsc",
+    "dev": "npm run build && concurrently -k \"tsc -w\" \"esbuild src/App.tsx --bundle --outfile=dist/App.js --format=iife --platform=browser --sourcemap --watch\" \"electron .\"",
     "dist": "npm run build && electron-builder",
     "dist:win": "npm run build && electron-builder --win",
     "start": "electron .",
@@ -17,11 +19,12 @@
     "electron-store": "^8.2.0"
   },
   "devDependencies": {
+    "@types/node": "^22.10.0",
+    "concurrently": "^9.1.0",
     "electron": "^33.2.0",
     "electron-builder": "^25.1.8",
-    "typescript": "^5.6.0",
-    "concurrently": "^9.1.0",
-    "@types/node": "^22.10.0"
+    "esbuild": "^0.25.12",
+    "typescript": "^5.6.0"
   },
   "build": {
     "appId": "com.jarvis.desktop",
@@ -33,13 +36,17 @@
       "dist/**/*",
       "config/**/*",
       "public/**/*",
+      "index.html",
+      "resources/**/*",
       "package.json"
     ],
     "win": {
       "target": [
         {
           "target": "nsis",
-          "arch": ["x64"]
+          "arch": [
+            "x64"
+          ]
         }
       ],
       "icon": "resources/icon.ico",

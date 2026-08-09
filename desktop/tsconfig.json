@@ -15,6 +15,9 @@
     "sourceMap": true,
     "moduleResolution": "node"
   },
-  "include": ["src/**/*"],
+  // Only the Electron main/preload processes are compiled by tsc.
+  // The renderer (src/App.tsx + services) is bundled to a browser-safe IIFE
+  // by esbuild via the "build:renderer" script (see package.json).
+  "include": ["src/main.ts", "src/preload.ts"],
   "exclude": ["node_modules", "dist", "release"]
 }

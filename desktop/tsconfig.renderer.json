@@ -1,0 +1,19 @@
+{
+  // Type-check configuration for the renderer UI (App.tsx + services/backend.ts).
+  // The actual output is produced by esbuild ("npm run build:renderer") as a
+  // browser-safe IIFE bundle — never by tsc (CommonJS output would crash when
+  // loaded via <script> because `exports`/`require` don't exist in the renderer).
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "strict": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true
+  },
+  "include": ["src/App.tsx", "src/services/**/*", "src/global.d.ts"]
+}

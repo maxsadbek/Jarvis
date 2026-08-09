@@ -123,10 +123,16 @@ styles.textContent = `
     width: 100%;
     height: 100%;
     overflow: hidden;
-    background: transparent !important;
+    /* Solid dark background by default (window is non-transparent for now).
+       When transparency is enabled via config, .jarvis-transparent restores it. */
+    background: #06060f;
     font-family: 'Inter', system-ui, sans-serif;
     color: var(--text-primary);
     -webkit-app-region: drag;
+  }
+
+  body.jarvis-transparent {
+    background: transparent !important;
   }
 
   /* ─── Shell ─── */
@@ -140,7 +146,7 @@ styles.textContent = `
     padding: 24px;
     position: relative;
     overflow: hidden;
-    background: rgba(6, 6, 15, 0.85);
+    background: rgba(10, 10, 26, 0.97);
     backdrop-filter: blur(20px);
     border-radius: 16px;
     border: 1px solid var(--glass-border);
@@ -1090,6 +1096,16 @@ function initApp(): void {
   shell.appendChild(mainUI);
 
   root.appendChild(shell);
+
+  // If the window is transparent (config), allow the page background to be
+  // see-through so the rounded glass shell is visible over the desktop.
+  if (window.jarvis) {
+    window.jarvis.getConfig().then((cfg: any) => {
+      if (cfg && cfg.window && cfg.window.transparent) {
+        document.body.classList.add("jarvis-transparent");
+      }
+    });
+  }
 
   // ─── Listen for startup progress events ────────────────────────────────
 
