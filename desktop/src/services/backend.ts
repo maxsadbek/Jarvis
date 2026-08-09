@@ -157,3 +157,20 @@ export async function getVoiceStatus(): Promise<any> {
     return { status: "unavailable" };
   }
 }
+
+/**
+ * Synthesize speech from text and return base64 audio.
+ */
+export async function synthesizeSpeech(text: string): Promise<string | null> {
+  try {
+    const response = await fetchWithTimeout(
+      `${BACKEND_URL}/api/voice/synthesize?text=${encodeURIComponent(text)}`,
+      { method: "POST" }
+    );
+    if (!response.ok) return null;
+    const data = await response.json();
+    return data.success ? data.audio : null;  // base64 WAV
+  } catch {
+    return null;
+  }
+}

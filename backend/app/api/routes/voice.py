@@ -6,6 +6,8 @@ speech-to-text and text-to-speech operations.
 
 from __future__ import annotations
 
+import asyncio
+
 from fastapi import APIRouter, UploadFile, File, HTTPException
 from loguru import logger
 
@@ -13,6 +15,19 @@ from backend.app.config import settings
 from backend.app.models.schemas import VoiceConfig
 
 router = APIRouter(prefix="/api/voice", tags=["voice"])
+
+# Reused TTS instance so the Piper model is loaded only once instead of
+# per-request (model load takes ~2s and would risk the desktop 5s timeout).
+_tts_instance = None
+_tts_lock: asyncio.Lock | None = None
+
+
+def _get_tts_lock() -> asyncio.Lock:
+    """Lazily create the TTS lock inside an event loop."""
+    global _tts_lock
+    if _tts_lock is None:
+        _tts_lock = asyncio.Lock()
+    return _tts_lock
 
 
 @router.get("/status")
@@ -59,9 +74,13 @@ async def synthesize_speech(text: str) -> dict:
     try:
         from backend.app.voice.tts import TextToSpeech
 
-        tts = TextToSpeech()
-        await tts.initialize()
-        audio_bytes = await tts.synthesize(text)
+        global _tts_instance
+        async with _get_tts_lock():
+            if _tts_instance is None or not _tts_instance.is_ready:
+                tts = TextToSpeech()
+                if await tts.initialize():
+                    _tts_instance = tts
+        audio_bytes = await _tts_instance.synthesize(text)
 
         import base64
         return {

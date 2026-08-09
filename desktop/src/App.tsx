@@ -1,4 +1,7 @@
+import { synthesizeSpeech } from "./services/backend";
+
 /**
+
  * JARVIS Desktop - Main Overlay Application
  *
  * A futuristic holographic UI overlay with startup diagnostics animation.
@@ -994,6 +997,16 @@ async function sendMessage(): Promise<void> {
       });
       responseArea.appendChild(respMsg);
       setState("speaking");
+      
+      const base64Audio = await synthesizeSpeech(response);
+      if (base64Audio) {
+        const audio = new Audio(`data:audio/wav;base64,${base64Audio}`);
+        audio.play().catch(() => {
+          // Autoplay blocked or decode failure — fall back to silent mode.
+          console.warn("[JARVIS] Audio playback blocked");
+        });
+      }
+
       await sleep(Math.min(response.length * 30, 3000));
     } else if (result && result.error) {
       const errorMsg = el("div", {

@@ -216,7 +216,9 @@ class AIEngine:
 
         # ── Stage 1: Intent Detection (fast path) ──
         if self._intent_processor:
+            logger.info(f"[INTENT DEBUG] Xabar: '{message}'")
             intent = await self._intent_processor.process(message)
+            logger.info(f"[INTENT DEBUG] Natija: intent={intent.intent.value}, tool={intent.tool_name}, action={intent.action}, params={intent.params}")
 
             if intent.intent != CommandIntent.CHAT and intent.intent != CommandIntent.UNKNOWN:
                 # Handle via tool directly
@@ -382,13 +384,16 @@ class AIEngine:
                 module = importlib.import_module(module_path)
                 tool_cls = getattr(module, class_name)
                 tool = tool_cls()
+                logger.info(f"[INTENT DEBUG] Executing direct tool: {intent.tool_name}")
                 result = await tool.execute(**{**intent.params, "action": intent.action})
                 if result.get("success"):
                     return result.get("result", "Done!")
                 return result.get("error", "Command failed")
             except Exception as e:
-                logger.error(f"Direct tool execution failed: {e}")
-                return f"Command failed: {str(e)}"
+                import traceback
+                error_trace = traceback.format_exc()
+                logger.error(f"Direct tool execution failed: {error_trace}")
+                return f"Command failed: {str(e)}\nTo'liq xato: {error_trace}"
 
         # ── Handle via existing ToolRegistry (system_ctl, browser, web_search, etc.) ──
         if self._tool_registry:
@@ -409,14 +414,21 @@ class AIEngine:
                 name=tn,
                 arguments={**intent.params, "action": intent.action},
             )
-            result = await self._tool_registry.execute_tool(tool_call=tc, auto_confirm=True)
+            logger.info(f"[INTENT DEBUG] Executing registry tool: {tn.value}")
+            try:
+                result = await self._tool_registry.execute_tool(tool_call=tc, auto_confirm=True)
 
-            if result.status == "completed":
-                return result.result or "Done!"
-            elif result.status == "denied":
-                return f"I can't do that: {result.error}"
-            elif result.status == "error":
-                return f"Command failed: {result.error}"
+                if result.status == "completed":
+                    return result.result or "Done!"
+                elif result.status == "denied":
+                    return f"I can't do that: {result.error}"
+                elif result.status == "error":
+                    return f"Command failed: {result.error}"
+            except Exception as e:
+                import traceback
+                error_trace = traceback.format_exc()
+                logger.error(f"Tool registry execution failed: {error_trace}")
+                return f"Command failed: {str(e)}\nTo'liq xato: {error_trace}"
 
         return "Tool system not available."
 

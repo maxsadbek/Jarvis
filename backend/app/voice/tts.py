@@ -45,9 +45,12 @@ class TextToSpeech:
                 model_path = None
                 candidates = [voice_name, *settings.PIPER_VOICE_FALLBACK_MODELS]
                 for candidate in candidates:
-                    candidate_path = models_dir / f"{candidate}.onnx"
-                    if candidate_path.exists():
-                        model_path = candidate_path
+                    # Search recursively so BOTH layouts work:
+                    #  - flat:           data/models/<voice>.onnx
+                    #  - hf_hub_download: data/models/<lang>/<lang>_<REGION>/<voice>/<quality>/<voice>.onnx
+                    candidate_paths = sorted(models_dir.glob(f"**/{candidate}.onnx"))
+                    if candidate_paths:
+                        model_path = candidate_paths[0]
                         voice_name = candidate
                         break
 
@@ -95,12 +98,25 @@ class TextToSpeech:
             # Generate audio
             audio_stream = io.BytesIO()
             with wave.open(audio_stream, "wb") as wav_file:
-                self._voice.synthesize(
-                    text,
-                    wav_file,
-                    speaker_id=None,  # Use default speaker
-                    length_scale=1.0 / settings.TTS_SPEED,
-                )
+                if hasattr(self._voice, "synthesize_wav"):
+                    # piper-tts >= 1.3: chunk-based API, speed via SynthesisConfig
+                    from piper.voice import SynthesisConfig
+
+                    self._voice.synthesize_wav(
+                        text,
+                        wav_file,
+                        syn_config=SynthesisConfig(
+                            length_scale=1.0 / settings.TTS_SPEED,
+                        ),
+                    )
+                else:
+                    # piper 1.2.x legacy API
+                    self._voice.synthesize(
+                        text,
+                        wav_file,
+                        speaker_id=None,  # Use default speaker
+                        length_scale=1.0 / settings.TTS_SPEED,
+                    )
 
             audio_bytes = audio_stream.getvalue()
             logger.debug(f"Synthesized {len(text)} chars -> {len(audio_bytes)} bytes audio")
