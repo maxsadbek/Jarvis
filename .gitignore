@@ -44,3 +44,7 @@ build/
 *.egg-info/
 
 data/models/
+backend/data/
+data/memory/
+*.lock
+*.incomplete
