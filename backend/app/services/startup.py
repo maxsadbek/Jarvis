@@ -40,7 +40,7 @@ class StartupConfig:
     backend_url: str = "http://127.0.0.1:8000"
     health_endpoint: str = "/api/health"
     health_check_interval: float = 5.0  # Seconds between health checks
-    startup_timeout: float = 30.0  # Max seconds to wait for backend to start
+    startup_timeout: float = 300.0  # Max seconds to wait for backend to start
     restart_delay: float = 3.0  # Delay before restarting
     max_restarts: int = 5  # Max restart attempts in a window
     restart_window_minutes: int = 5  # Time window for restart counting

@@ -90,40 +90,38 @@ class VectorMemory(MemoryBackend):
         self._privacy = privacy
 
         try:
-            import asyncio
             import chromadb
+            from chromadb.config import Settings as ChromaSettings
 
             persist_dir = settings.get_data_path(settings.MEMORY_PERSIST_DIR)
             persist_dir.mkdir(parents=True, exist_ok=True)
 
-            logger.info(f"[vector] ChromaDB PersistentClient yaratilmoqda: {persist_dir}")
+            logger.info(f"[vector] ChromaDB PersistentClient yaratilmoqda (telemetry=False): {persist_dir}...")
+            
+            self._client = chromadb.PersistentClient(
+                path=str(persist_dir),
+                settings=ChromaSettings(anonymized_telemetry=False)
+            )
+            
+            logger.info("[vector] PersistentClient yaratildi. Kolleksiyalarni tekshiramiz...")
 
-            def _create_chroma_client():
-                """Sinxron ChromaDB operatsiyalarini background threadda bajaring."""
-                client = chromadb.PersistentClient(
-                    path=str(persist_dir),
-                )
-                collection_names = [
-                    self.COLLECTION_CONVERSATIONS,
-                    self.COLLECTION_FACTS,
-                    self.COLLECTION_SUMMARIES,
-                    self.COLLECTION_KNOWLEDGE,
-                ]
-                cols = {}
-                for name in collection_names:
-                    try:
-                        cols[name] = client.get_or_create_collection(
-                            name=name,
-                            metadata={"hnsw:space": "cosine"},
-                        )
-                    except Exception as e:
-                        logger.warning(f"Could not create collection '{name}': {e}")
-                return client, cols
+            collection_names = [
+                self.COLLECTION_CONVERSATIONS,
+                self.COLLECTION_FACTS,
+                self.COLLECTION_SUMMARIES,
+                self.COLLECTION_KNOWLEDGE,
+            ]
 
-            # asyncio.to_thread — sinxron bloklovchi ChromaDB callni
-            # background threadga o'tkazamiz, event loop bloklanmaydi
-            self._client, self._collections = await asyncio.to_thread(_create_chroma_client)
-            logger.info("[vector] ChromaDB PersistentClient muvaffaqiyatli yaratildi")
+            for name in collection_names:
+                try:
+                    self._collections[name] = self._client.get_or_create_collection(
+                        name=name,
+                        metadata={"hnsw:space": "cosine"},
+                    )
+                except Exception as e:
+                    logger.warning(f"Could not create collection '{name}': {e}")
+
+            logger.info("[vector] ChromaDB PersistentClient muvaffaqiyatli yaratildi (Sinxron)")
 
             self._initialized = True
             total = sum(c.count() for c in self._collections.values() if c)

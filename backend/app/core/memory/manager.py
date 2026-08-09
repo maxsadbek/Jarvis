@@ -102,10 +102,23 @@ class MemoryManager:
 
             # 5. Vector memory with encryption and privacy
             self._vector = VectorMemory()
-            vector_ok = await self._vector.initialize(
-                encryption=self._encryption,
-                privacy=self._privacy,
-            )
+            try:
+                import asyncio
+                logger.info("  - Vector memory initialize boshlanmoqda (15s timeout)...")
+                vector_ok = await asyncio.wait_for(
+                    self._vector.initialize(
+                        encryption=self._encryption,
+                        privacy=self._privacy,
+                    ),
+                    timeout=15.0
+                )
+                logger.info(f"  ✓ Vector memory initialized (status: {vector_ok})")
+            except asyncio.TimeoutError:
+                logger.warning("  ✗ Vector memory initialization TIMEOUT (15s). Falling back to degraded memory.")
+                vector_ok = False
+            except Exception as ex:
+                logger.warning(f"  ✗ Vector memory failed to initialize: {ex}. Falling back to degraded memory.")
+                vector_ok = False
 
             # 6. User preferences
             self._preferences = UserPreferences()
